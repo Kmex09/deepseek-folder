@@ -1,0 +1,21 @@
+# 依赖与构建产物
+node_modules/
+dist/
+.npm-cache/
+.tmp-desktop-profile/
+
+# DSF 运行时数据（本地记忆文件，勿提交）
+dsf-data.json
+dsf-data.json.tmp
+dsf-server.log
+
+# 系统 / 编辑器临时文件
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+
+# Python 编译产物
+__pycache__/
+*.pyc
+*.pyo

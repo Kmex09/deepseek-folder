@@ -1,0 +1,17 @@
+# 统一行尾：仓库内一律 LF，Windows 专用脚本保持 CRLF
+* text=auto eol=lf
+
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制资源不做行尾转换、不参与文本 diff
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+
+# 锁文件在 diff 中折叠（仍然完整提交）
+package-lock.json -diff linguist-generated

@@ -1,0 +1,46 @@
+{
+  "name": "dsf-desktop",
+  "productName": "DSF 会话夹",
+  "version": "0.3.2",
+  "private": true,
+  "description": "DSF · DeepSeek 会话夹 桌面版（Electron）。复用 web 版页面，内嵌本地服务，数据自动保存到用户数据目录，无需任何手动保存/授权。",
+  "author": "DSF",
+  "main": "desktop/main.js",
+  "scripts": {
+    "test": "node tests/smoke.js && node tests/desktop-server.js",
+    "start": "electron .",
+    "smoke": "electron . --smoke",
+    "smoke:write": "electron . --smoke-write",
+    "smoke:persist": "electron . --smoke-expect-persist",
+    "web": "node desktop/server.js",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.dsf.sessionfolder",
+    "productName": "DSF 会话夹",
+    "files": [
+      "index.html",
+      "css/**/*",
+      "js/**/*",
+      "assets/**/*",
+      "desktop/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "portable",
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "shortcutName": "DSF 会话夹"
+    }
+  }
+}
