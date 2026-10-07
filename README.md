@@ -28,7 +28,7 @@ DSF 就是存放这些链接的「网页版文件夹」：拖入即存、点击�
 
 ## 快速开始
 
-### 方式 A（最推荐）：桌面版（Electron，无需 Python、无需授权）
+### 1.桌面版
 
 ```bash
 npm install        # 首次执行一次，下载 Electron（约 100MB，需联网）
@@ -51,7 +51,7 @@ npm start          # 打开 DSF 桌面应用
   npm run dist
   ```
 
-### 方式 B：网页版 + 一键启动脚本（无需 Node，需要 Python）
+### 2.网页版
 
 Windows 双击 `start-dsf.cmd`；macOS / Linux 运行 `./start-dsf.sh`。
 脚本启动服务并自动打开浏览器 —— 所有改动写入项目目录的 **`dsf-data.json`**。
