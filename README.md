@@ -90,21 +90,6 @@ node desktop/server.js 8000 # 或：Node 版服务器（无需 Python）
 > - 用服务器模式打开时，**只有从本机页面发出的请求**才能读写数据接口
 >   （校验回环 Host + 同源 Origin + 会话令牌），别的前缀或别处的网页无法覆盖你的数据文件。
 
-## 从旧版本升级（DSF → DeepSeek Folder）
-
-v0.5.0 起项目与程序更名为 **DeepSeek Folder**（原来叫 DSF / “DeepSeek 会话夹”）。
-**旧数据会自动迁移，不需要手动操作**：
-
-| 旧位置 | 新位置 | 迁移方式 |
-| --- | --- | --- |
-| `%APPDATA%\DSF 会话夹\dsf-data.json` | `%APPDATA%\DeepSeek Folder\deepseek-folder-data.json` | 桌面版首次启动自动复制（旧文件保留） |
-| 项目目录 `dsf-data.json` | `deepseek-folder-data.json` | 服务器启动时自动迁移（旧文件保留） |
-| 浏览器 localStorage `dsf.data.v1` | `deepseek-folder.data.v1` | 页面加载时自动读取旧键并写入新键，并提示“已迁移” |
-| 旧版桌面程序 / 快捷方式 | 新版安装包 | 建议先卸载旧版再装新版（应用 ID 已变更） |
-
-> 迁移都是**复制**而非移动，旧文件与旧键保持原样，因此回退到旧版本也仍然可用。
-> GitHub 仓库同时更名为 `deepseek-folder`（旧地址会自动跳转）。
-
 ## 首次使用三步
 
 1. **新建文件夹** —— 例如「学习 / 工作 / 灵感」，进入文件夹后还能继续建**子文件夹**细分；
