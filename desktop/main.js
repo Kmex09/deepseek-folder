@@ -1,14 +1,14 @@
 /* =========================================================================
- * desktop/main.js — DSF 桌面版主进程（Electron）
+ * desktop/main.js — DeepSeek Folder 桌面版主进程（Electron）
  * -------------------------------------------------------------------------
  * 设计要点：
  *   1) 页面代码零改动：主进程内嵌 desktop/server.js（与 server.py 同接口），
  *      窗口加载 http://127.0.0.1:<随机端口>/ —— 页面自动进入“数据文件”模式；
- *   2) 数据落在用户数据目录（Windows: %APPDATA%\DSF 会话夹\dsf-data.json），
+ *   2) 数据落在用户数据目录（Windows: %APPDATA%\DeepSeek Folder\deepseek-folder-data.json），
  *      无需任何授权、无需手动保存、重启电脑也不会丢；
  *   3) DeepSeek 会话链接一律交给系统默认浏览器打开，不在应用内新开窗口；
  *   4) 单实例运行：重复启动会聚焦已有窗口；
- *   5) 退出前先让页面把最后一次改动落盘（DSF.flush），再真正关窗；
+ *   5) 退出前先让页面把最后一次改动落盘（DF.flush），再真正关窗；
  *   6) 快速导入悬浮窗：开关开启后，主窗口不在前台（最小化/被浏览器挡住）时，
  *      屏幕角落保留一个“始终置顶”的迷你窗；把链接拖进去即自动唤起主窗口并导入。
  *
@@ -20,6 +20,14 @@ const fs = require('fs');
 const path = require('path');
 const { app, BrowserWindow, Menu, shell, session, ipcMain, screen } = require('electron');
 const { createServer } = require('./server');
+
+// 防御：若在设置了 ELECTRON_RUN_AS_NODE=1 的环境里启动（Electron 会退化成纯 Node），
+// require('electron') 拿不到主进程 API —— 直接给出可操作的提示，而不是晦涩的 TypeError
+if (!app || typeof app.requestSingleInstanceLock !== 'function') {
+  console.error('[deepseek-folder] 没有 Electron 主进程能力：请用 `npm start` 启动。' +
+    '若环境中设置了 ELECTRON_RUN_AS_NODE=1，请先清除它再运行。');
+  process.exit(1);
+}
 
 const ROOT_DIR = path.join(__dirname, '..');
 const SMOKE = process.argv.includes('--smoke');
@@ -49,7 +57,38 @@ let quitting = false;
 
 /** 数据文件：始终放在系统“用户数据目录”，与安装位置无关 */
 function dataFilePath() {
-  return path.join(app.getPath('userData'), 'dsf-data.json');
+  return path.join(app.getPath('userData'), 'deepseek-folder-data.json');
+}
+
+/**
+ * v0.5.0 项目改名（DSF 会话夹 → DeepSeek Folder）后 userData 目录也跟着改名，
+ * 这里把旧目录里的数据文件与设置复制到新目录，避免老用户“数据消失”。
+ * 只在目标不存在时复制；旧目录原样保留，回退旧版本仍可用。
+ */
+function migrateLegacyUserData(log) {
+  const appData = app.getPath('appData');
+  const newDir = app.getPath('userData');
+  const legacyDirs = [path.join(appData, 'DSF 会话夹')];
+  const pairs = [
+    ['dsf-data.json', 'deepseek-folder-data.json'],
+    ['desktop-settings.json', 'desktop-settings.json']
+  ];
+
+  legacyDirs.forEach((legacyDir) => {
+    if (!fs.existsSync(legacyDir)) return;
+    pairs.forEach(([from, to]) => {
+      const src = path.join(legacyDir, from);
+      const dest = path.join(newDir, to);
+      if (!fs.existsSync(src) || fs.existsSync(dest)) return;
+      try {
+        fs.mkdirSync(newDir, { recursive: true });
+        fs.copyFileSync(src, dest);
+        log('[deepseek-folder] 已迁移旧版本数据：' + src + ' → ' + dest);
+      } catch (e) {
+        log('[deepseek-folder] 旧数据迁移失败：' + e.message);
+      }
+    });
+  });
 }
 
 /* ------------------- 桌面版设置（主进程持有，独立于业务数据） ------------------- */
@@ -105,7 +144,7 @@ function createQuickWindow() {
     alwaysOnTop: true,
     hasShadow: false,
     show: false,
-    title: 'DSF 快速导入',
+    title: 'DeepSeek Folder 快速导入',
     icon: path.join(ROOT_DIR, 'assets', 'icon-256.png'),
     webPreferences: {
       preload: path.join(__dirname, 'quick-preload.js'),
@@ -191,29 +230,29 @@ function sanitizeQuickPayload(payload) {
 function handleQuickDrop(payload) {
   const safe = sanitizeQuickPayload(payload);
   restoreMain();
-  sendToRenderer('dsf:quick-import', safe);
+  sendToRenderer('deepseek-folder:quick-import', safe);
   return safe;
 }
 
 function registerQuickIpc() {
-  ipcMain.on('dsf:quick-get', (event) => { event.returnValue = !!settings.quickWindow; });
+  ipcMain.on('deepseek-folder:quick-get', (event) => { event.returnValue = !!settings.quickWindow; });
 
-  ipcMain.on('dsf:quick-set', (_event, value) => {
+  ipcMain.on('deepseek-folder:quick-set', (_event, value) => {
     settings.quickWindow = !!value;
     saveSettings();
     updateQuickVisibility();
-    if (win && !win.isDestroyed()) win.webContents.send('dsf:quick-changed', settings.quickWindow);
+    if (win && !win.isDestroyed()) win.webContents.send('deepseek-folder:quick-changed', settings.quickWindow);
   });
 
-  ipcMain.on('dsf:quick-close', () => {
+  ipcMain.on('deepseek-folder:quick-close', () => {
     settings.quickWindow = false;
     saveSettings();
     updateQuickVisibility();
-    if (win && !win.isDestroyed()) win.webContents.send('dsf:quick-changed', false);
+    if (win && !win.isDestroyed()) win.webContents.send('deepseek-folder:quick-changed', false);
   });
 
-  ipcMain.on('dsf:restore-main', () => restoreMain());
-  ipcMain.on('dsf:quick-drop', (_event, payload) => handleQuickDrop(payload));
+  ipcMain.on('deepseek-folder:restore-main', () => restoreMain());
+  ipcMain.on('deepseek-folder:quick-drop', (_event, payload) => handleQuickDrop(payload));
 }
 
 /** 一次性完成的 Promise（用于等待“写盘/落盘”这类事件） */
@@ -234,13 +273,19 @@ if (!app.requestSingleInstanceLock()) {
     win.focus();
   });
   app.whenReady().then(start).catch((err) => {
-    console.error('[dsf] 启动失败：', err);
+    console.error('[deepseek-folder] 启动失败：', err);
     app.exit(1);
   });
 }
 
 /* --------------------------- 启动流程 --------------------------- */
 async function start() {
+  // 改名迁移必须在读取任何数据之前完成
+  // （自检可用 DEEPSEEK_FOLDER_SKIP_MIGRATE=1 跳过，保证测试环境干净可控）
+  if (process.env.DEEPSEEK_FOLDER_SKIP_MIGRATE !== '1') {
+    migrateLegacyUserData((msg) => console.log(msg));
+  }
+
   const dataFile = dataFilePath();
   const dataSaved = deferred();
   const pageFlushed = deferred();
@@ -263,13 +308,13 @@ async function start() {
 
   const port = server.address().port;
   appUrl = 'http://127.0.0.1:' + port + '/';
-  console.log('[dsf] 数据文件：' + dataFile);
-  console.log('[dsf] 本地服务：' + appUrl);
+  console.log('[deepseek-folder] 数据文件：' + dataFile);
+  console.log('[deepseek-folder] 本地服务：' + appUrl);
 
   // 下载（导出备份）：弹出“另存为”对话框，避免静默落到下载文件夹
   try {
     session.defaultSession.on('will-download', (event, item) => {
-      item.setSaveDialogOptions({ title: '导出 DSF 备份', defaultPath: item.getFilename() });
+      item.setSaveDialogOptions({ title: '导出 DeepSeek Folder 备份', defaultPath: item.getFilename() });
     });
     session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   } catch (e) { /* 旧版本 Electron 上忽略 */ }
@@ -279,7 +324,7 @@ async function start() {
     height: 860,
     minWidth: 960,
     minHeight: 620,
-    title: 'DSF · DeepSeek 会话夹',
+    title: 'DeepSeek Folder · 会话夹',
     icon: path.join(ROOT_DIR, 'assets', 'icon-256.png'), // 窗口 / 任务栏图标
     backgroundColor: '#f4f5f8',
     autoHideMenuBar: true,
@@ -321,7 +366,7 @@ async function start() {
       try { win.destroy(); } catch (e) { /* ignore */ }
       return;
     }
-    win.webContents.executeJavaScript('window.DSF && window.DSF.flush && window.DSF.flush()')
+    win.webContents.executeJavaScript('window.DF && window.DF.flush && window.DF.flush()')
       .catch(() => {})
       .then(() => pageFlushed.promise)
       .then(() => { try { win.destroy(); } catch (e) { /* ignore */ } })
@@ -353,8 +398,8 @@ async function start() {
   if (SMOKE_WRITE) {
     // 写自检：在页面里真实创建一个文件夹（走 store → 内嵌服务 → 数据文件）
     const created = await win.webContents.executeJavaScript(
-      "(() => { try { window.DSF.store.createFolder('" + MARKER_FOLDER + "');" +
-      " return window.DSF.store.data.folders.some(f => f.name === '" + MARKER_FOLDER + "'); }" +
+      "(() => { try { window.DF.store.createFolder('" + MARKER_FOLDER + "');" +
+      " return window.DF.store.data.folders.some(f => f.name === '" + MARKER_FOLDER + "'); }" +
       " catch (e) { return false; } })()"
     ).catch(() => false);
     // 等真正的落盘事件，而不是猜一个延迟
@@ -371,8 +416,8 @@ async function start() {
   if (SMOKE_EXPECT) {
     // 重启自检：新进程重新读取数据文件，应能看到上次写入的文件夹
     const persisted = await win.webContents.executeJavaScript(
-      "(async () => { try { const t = (document.querySelector('meta[name=\"dsf-token\"]') || {}).content || '';" +
-      " const r = await fetch('api/state', { cache: 'no-store', headers: { 'X-DSF-Token': t } });" +
+      "(async () => { try { const t = (document.querySelector('meta[name=\"df-token\"]') || {}).content || '';" +
+      " const r = await fetch('api/state', { cache: 'no-store', headers: { 'X-DeepSeek-Folder-Token': t } });" +
       " const j = await r.json(); return !!(r.ok && j && Array.isArray(j.folders) &&" +
       " j.folders.some(f => f.name === '" + MARKER_FOLDER + "')); } catch (e) { return false; } })()"
     ).catch(() => false);
@@ -382,16 +427,22 @@ async function start() {
   }
 
   if (SMOKE_QUICK) {
-    // 悬浮窗自检：初始应为关闭 → 开启 → 最小化主窗后悬浮窗置顶可见
-    // → 模拟拖入链接 → 主窗被唤起且页面收到数据 → 设置已落盘
+    // 悬浮窗自检：开关可读 → 前台时不显示 → 开启 → 最小化主窗后置顶可见
+    // → 模拟拖入链接 → 主窗被唤起且页面收到数据 → 设置已落盘 → 关闭后隐藏
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const checks = [];
 
-    checks.push(['初始为关闭', settings.quickWindow === false]);
+    // 初始状态可能是从旧版本迁移来的（真假都合法），这里只校验“可读 + 为布尔值”
+    checks.push(['开关初始状态可读取', typeof settings.quickWindow === 'boolean']);
     checks.push(['主窗在前台时悬浮窗不应出现', !(quickWin && quickWin.isVisible())]);
 
+    // 统一先置为关闭，保证后续步骤的起点确定
+    ipcMain.emit('deepseek-folder:quick-set', null, false);
+    await wait(150);
+    checks.push(['关闭状态下设置正确落盘', settings.quickWindow === false]);
+
     // 1) 开启开关（等价于页面里点击“悬浮窗”按钮）
-    ipcMain.emit('dsf:quick-set', null, true);
+    ipcMain.emit('deepseek-folder:quick-set', null, true);
     await wait(200);
     checks.push(['开关开启后写入设置', settings.quickWindow === true]);
 
@@ -406,7 +457,7 @@ async function start() {
     // 悬浮窗页面本身要真的加载成功（含链接解析逻辑），否则等于一个空壳
     const quickPageOk = await (quickWin
       ? quickWin.webContents.executeJavaScript(
-        "!!(window.DSF && window.DSF.utils && document.getElementById('drop'))"
+        "!!(window.DF && window.DF.utils && document.getElementById('drop'))"
       ).catch(() => false)
       : Promise.resolve(false));
     checks.push(['悬浮窗页面加载成功（含链接解析）', quickPageOk === true]);
@@ -424,7 +475,7 @@ async function start() {
     checks.push(['拖入后自动唤起主窗口', mainRestored]);
 
     const received = await win.webContents.executeJavaScript(
-      "!!(window.__dsfQuickImport && window.__dsfQuickImport.plain)"
+      "!!(window.__dfQuickImport && window.__dfQuickImport.plain)"
     ).catch(() => false);
     checks.push(['页面收到悬浮窗数据', received === true]);
 
@@ -435,7 +486,7 @@ async function start() {
     checks.push(['开关状态已持久化', settingsOnDisk]);
 
     // 4) 关闭开关 → 悬浮窗应隐藏
-    ipcMain.emit('dsf:quick-set', null, false);
+    ipcMain.emit('deepseek-folder:quick-set', null, false);
     await wait(300);
     checks.push(['关闭开关后悬浮窗隐藏', !(quickWin && quickWin.isVisible())]);
 
@@ -449,8 +500,8 @@ async function start() {
   if (SMOKE) {
     // 基础自检：页面能加载 + 数据接口可用（含首启动自动建数据文件、令牌注入）
     const ok = await win.webContents.executeJavaScript(
-      "(async () => { try { const t = (document.querySelector('meta[name=\"dsf-token\"]') || {}).content || '';" +
-      " const r = await fetch('api/state', { cache: 'no-store', headers: { 'X-DSF-Token': t } });" +
+      "(async () => { try { const t = (document.querySelector('meta[name=\"df-token\"]') || {}).content || '';" +
+      " const r = await fetch('api/state', { cache: 'no-store', headers: { 'X-DeepSeek-Folder-Token': t } });" +
       " const j = await r.json(); return !!(r.ok && j && Array.isArray(j.folders)); }" +
       " catch (e) { return false; } })()"
     ).catch(() => false);

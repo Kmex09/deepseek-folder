@@ -1,13 +1,13 @@
 @echo off
 rem ============================================================
-rem  DSF launcher (Windows, foreground single window)
-rem  1) runs server.py  (web page + autosave to dsf-data.json)
+rem  DeepSeek Folder launcher (Windows, foreground single window)
+rem  1) runs server.py  (web page + autosave to deepseek-folder-data.json)
 rem  2) auto-opens browser  http://127.0.0.1:8000/
 rem  Closing this window stops the server.
 rem  (ASCII-only on purpose: Chinese text + chcp breaks cmd parsing)
 rem ============================================================
 cd /d "%~dp0"
-title DSF - DeepSeek Session Folder
+title DeepSeek Folder
 setlocal
 
 set "PYCMD="
@@ -25,7 +25,7 @@ rem --- make sure it is a real Python, not the Windows Store stub ---
 if errorlevel 1 goto :nopython
 
 echo.
-echo  Starting DSF server with: %PYCMD%
+echo  Starting DeepSeek Folder server with: %PYCMD%
 echo  URL:  http://127.0.0.1:8000/
 echo  The browser will open automatically. Close this window to stop.
 echo.

@@ -2,7 +2,7 @@
  * desktop/quick.js — 快速导入悬浮窗的渲染逻辑
  * -------------------------------------------------------------------------
  * 职责：接收从浏览器拖来的链接 / 文本 / 文本文件，用与网页版相同的
- *       DSF.utils 解析规则识别 DeepSeek 链接，然后把原始数据交给主进程，
+ *       DF.utils 解析规则识别 DeepSeek 链接，然后把原始数据交给主进程，
  *       由主进程唤起主窗口并转交给页面完成导入。
  * 注意：本窗口不做任何导入决策，只做「接收 → 转交」。
  * ========================================================================= */
@@ -77,7 +77,7 @@
 
   function finish(payload) {
     var count = 0;
-    try { count = window.DSF.utils.buildCandidates(payload).length; } catch (err) { count = 0; }
+    try { count = window.DF.utils.buildCandidates(payload).length; } catch (err) { count = 0; }
 
     if (!count) {
       setState('未识别到链接', 'hot');
@@ -86,7 +86,7 @@
     }
 
     setState('已接收 ' + count + ' 个链接', 'ok');
-    if (window.dsfQuick) window.dsfQuick.sendDrop(payload);
+    if (window.dfQuick) window.dfQuick.sendDrop(payload);
     scheduleReset();
   }
 
@@ -94,11 +94,11 @@
 
   closeBtn.addEventListener('click', function (e) {
     e.stopPropagation();
-    if (window.dsfQuick) window.dsfQuick.close();
+    if (window.dfQuick) window.dfQuick.close();
   });
 
   // 点击悬浮窗（非关闭按钮）＝ 唤起主窗口
   window.addEventListener('click', function () {
-    if (window.dsfQuick) window.dsfQuick.restore();
+    if (window.dfQuick) window.dfQuick.restore();
   });
 })();

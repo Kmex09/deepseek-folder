@@ -1,10 +1,10 @@
 {
-  "name": "dsf-desktop",
-  "productName": "DSF 会话夹",
-  "version": "0.4.0",
+  "name": "deepseek-folder",
+  "productName": "DeepSeek Folder",
+  "version": "0.5.0",
   "private": true,
-  "description": "DSF · DeepSeek 会话夹 桌面版（Electron）。复用 web 版页面，内嵌本地服务，数据自动保存到用户数据目录，无需任何手动保存/授权。",
-  "author": "DSF",
+  "description": "DeepSeek Folder · 会话夹 桌面版（Electron）。复用 web 版页面，内嵌本地服务，数据自动保存到用户数据目录，无需任何手动保存/授权。",
+  "author": "DF",
   "main": "desktop/main.js",
   "scripts": {
     "test": "node tests/smoke.js && node tests/desktop-server.js",
@@ -21,8 +21,8 @@
     "electron-builder": "^26.15.3"
   },
   "build": {
-    "appId": "com.dsf.sessionfolder",
-    "productName": "DSF 会话夹",
+    "appId": "com.deepseekfolder.app",
+    "productName": "DeepSeek Folder",
     "files": [
       "index.html",
       "css/**/*",
@@ -41,7 +41,7 @@
     "nsis": {
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "shortcutName": "DSF 会话夹"
+      "shortcutName": "DeepSeek Folder"
     }
   }
 }

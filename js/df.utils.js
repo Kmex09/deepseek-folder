@@ -1,5 +1,5 @@
 /* =========================================================================
- * dsf.utils.js — DSF (DeepSeek Session Folder) 工具层
+ * df.utils.js — DeepSeek Folder 工具层
  * -------------------------------------------------------------------------
  * 提供通用小工具与「DeepSeek 会话链接」解析能力。
  * 纯浏览器环境、无第三方依赖，兼容 file:// 直接打开。
@@ -205,6 +205,6 @@
     return candidates;
   };
 
-  global.DSF = global.DSF || {};
-  global.DSF.utils = utils;
+  global.DF = global.DF || {};
+  global.DF.utils = utils;
 })(window);

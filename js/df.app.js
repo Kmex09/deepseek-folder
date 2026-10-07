@@ -1,5 +1,5 @@
 /* =========================================================================
- * dsf.app.js — DSF 主控层
+ * df.app.js — DeepSeek Folder 主控层
  * -------------------------------------------------------------------------
  * 职责：视图状态路由、事件委托、拖拽导入（外部链接 / 内部移动）、
  *       搜索、粘贴导入、备份导出 / 导入。
@@ -8,18 +8,18 @@
 (function (global) {
   'use strict';
 
-  var utils = global.DSF.utils;
-  var store = global.DSF.store;
-  var ui = global.DSF.ui;
+  var utils = global.DF.utils;
+  var store = global.DF.store;
+  var ui = global.DF.ui;
   var $ = ui.$;
 
-  var MIME_SESSION = 'application/x-dsf-session';
-  var MIME_FOLDER = 'application/x-dsf-folder';
+  var MIME_SESSION = 'application/x-deepseek-folder-session';
+  var MIME_FOLDER = 'application/x-deepseek-folder';
 
   /* ------------------------------ 视图状态 ------------------------------ */
   // mode: 'root' | 'folder'；searchText 非空时进入搜索视图
   var state = { mode: 'root', folderId: null, searchText: '' };
-  global.DSF.state = state;
+  global.DF.state = state;
 
   function goRoot() {
     state.mode = 'root';
@@ -557,7 +557,7 @@
     var text = store.exportJson();
     var d = new Date();
     function p(n) { return String(n).padStart(2, '0'); }
-    var fname = 'dsf-backup-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
+    var fname = 'deepseek-folder-backup-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
       '-' + p(d.getHours()) + p(d.getMinutes()) + '.json';
     var blob = new Blob([text], { type: 'application/json;charset=utf-8' });
     var a = document.createElement('a');
@@ -605,13 +605,13 @@
 
   /* ----------------- 数据文件自动保存（可选：server.py 后端） -----------------
    * 直接用浏览器打开 index.html（file://）：数据走浏览器本地存储；
-   * 用 server.py / 启动脚本打开：额外自动把数据写入项目目录的 dsf-data.json，
+   * 用 server.py / 启动脚本打开：额外自动把数据写入项目目录的 deepseek-folder-data.json，
    * 换浏览器、清缓存、换端口都不会丢数据（同一份数据文件即“本地记忆”）。
    * ---------------------------------------------------------------------- */
 
   // 存储模式：file=数据文件 / local=浏览器本地 / session=仅本次会话
   var storageInfo = { mode: store.isMemoryOnly() ? 'session' : 'local' };
-  global.DSF.storageInfo = storageInfo;
+  global.DF.storageInfo = storageInfo;
 
   var STATE_URL = 'api/state';
   var fileMode = false;    // 是否已连接上数据文件后端
@@ -625,15 +625,15 @@
 
   /** 数据接口会话令牌（由本地服务注入；file:// 直开时为占位符，等同无令牌） */
   function pageToken() {
-    var meta = document.querySelector('meta[name="dsf-token"]');
+    var meta = document.querySelector('meta[name="df-token"]');
     var v = meta ? (meta.getAttribute('content') || '') : '';
-    return (v && v.indexOf('__DSF_TOKEN__') < 0) ? v : '';
+    return (v && v.indexOf('__DEEPSEEK_FOLDER_TOKEN__') < 0) ? v : '';
   }
   var TOKEN = pageToken();
 
   function stateHeaders(extra) {
     var h = { 'Content-Type': 'application/json' };
-    if (TOKEN) h['X-DSF-Token'] = TOKEN;
+    if (TOKEN) h['X-DeepSeek-Folder-Token'] = TOKEN;
     if (extra) Object.assign(h, extra);
     return h;
   }
@@ -653,7 +653,7 @@
     ui.toast('数据文件写入失败（服务器窗口是否已关闭？）。已改用浏览器本地存储。', 'warn', 6000);
   }
 
-  /** 把当前快照写入 dsf-data.json（失败时降级为浏览器存储并提示） */
+  /** 把当前快照写入 deepseek-folder-data.json（失败时降级为浏览器存储并提示） */
   function pushToFile() {
     if (!fileMode) return;
     var body = store.fileSnapshot();
@@ -681,7 +681,7 @@
     pushToFile();
   }
   // 桌面版主进程退出前会调用它，避免“最后一次改动还在防抖等待中就退出”导致丢数据
-  global.DSF.flush = flushToFile;
+  global.DF.flush = flushToFile;
 
   /** file:// 直开模式的醒目引导条（可关闭，仅本次会话） */
   function showFileModeBanner() {
@@ -719,7 +719,7 @@
       if (localEmpty || remoteAt > localAt) {
         store.hydrateFrom(remote);
         if (!localEmpty && remoteAt > localAt) {
-          ui.toast('已从 dsf-data.json 恢复上次保存的数据', 'ok', 3600);
+          ui.toast('已从 deepseek-folder-data.json 恢复上次保存的数据', 'ok', 3600);
         }
       } else if (localAt > remoteAt) {
         pushToFile(); // 本地更新 → 覆盖回数据文件
@@ -730,12 +730,12 @@
   }
 
   /* ------------- 桌面版集成：快速导入悬浮窗（浏览器里自动跳过） -------------
-   * 桌面版由 preload 暴露 window.dsfDesktop；网页版没有该对象，
+   * 桌面版由 preload 暴露 window.dfDesktop；网页版没有该对象，
    * 因此下面整段逻辑在浏览器中直接返回，页面行为完全不变。
    * ---------------------------------------------------------------------- */
 
   function initDesktopIntegration() {
-    var desk = global.dsfDesktop;
+    var desk = global.dfDesktop;
     if (!desk || !desk.quickWindow) return;
 
     var btn = $('btnQuickWindow');
@@ -768,7 +768,7 @@
 
     // 悬浮窗拖入内容 → 主进程唤起主窗口 → 这里完成导入
     desk.onQuickImport(function (payload) {
-      window.__dsfQuickImport = payload; // 便于自检 / 调试
+      window.__dfQuickImport = payload; // 便于自检 / 调试
       var count = 0;
       try { count = utils.buildCandidates(payload || {}).length; } catch (e) { count = 0; }
       if (!count) { ui.toast('悬浮窗收到的内容里没有识别到 DeepSeek 链接', 'warn'); return; }
@@ -798,15 +798,20 @@
   // file:// 直接打开：显示引导条（此模式持久化依赖浏览器，重启有丢失风险）
   if (!isHttpOrigin()) showFileModeBanner();
 
+  // v0.5.0 改名：从旧版本（DSF）浏览器存储迁移过来的数据，明确告知用户
+  if (store.wasMigrated && store.wasMigrated()) {
+    ui.toast('已从旧版本 DSF 迁移本地数据到 DeepSeek Folder（旧数据仍保留）', 'ok', 4600);
+  }
+
   // 延迟确认：若浏览器拒绝存储且未连上数据文件后端，给出明显提示
   setTimeout(function () {
     if (store.isMemoryOnly() && !fileMode) {
       ui.toast('当前环境不允许本地存储且未连接数据文件：内容仅本次会话有效。' +
-        '请用 start-dsf.cmd（server.py）打开以自动保存到 dsf-data.json。', 'warn', 9000);
+        '请用 start-deepseek-folder.cmd（server.py）打开以自动保存到 deepseek-folder-data.json。', 'warn', 9000);
     }
   }, 900);
 
-  // 关闭 / 刷新页面前把最后一次改动落盘到数据文件（桌面版另由主进程调用 DSF.flush）
+  // 关闭 / 刷新页面前把最后一次改动落盘到数据文件（桌面版另由主进程调用 DF.flush）
   window.addEventListener('pagehide', flushToFile);
   window.addEventListener('beforeunload', flushToFile);
 })(window);

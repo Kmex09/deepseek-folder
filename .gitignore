@@ -4,9 +4,13 @@ dist/
 .npm-cache/
 .tmp-desktop-profile/
 
-# DSF 运行时数据（本地记忆文件，勿提交）
+# DeepSeek Folder 运行时数据（本地记忆文件，勿提交）
+deepseek-folder-data.json
+deepseek-folder-data.json.tmp
+deepseek-folder-server.log
+
+# 改名前的旧文件（自动迁移用，仅本地保留）
 dsf-data.json
-dsf-data.json.tmp
 dsf-server.log
 
 # 系统 / 编辑器临时文件

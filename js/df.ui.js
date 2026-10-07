@@ -1,16 +1,16 @@
 /* =========================================================================
- * dsf.ui.js — DSF 渲染层
+ * df.ui.js — DeepSeek Folder 渲染层
  * -------------------------------------------------------------------------
- * 职责：把数据（DSF.store）+ 视图状态（DSF.state）渲染为 DOM；
+ * 职责：把数据（DF.store）+ 视图状态（DF.state）渲染为 DOM；
  *       提供通用弹窗 / 提示框 / 选择器 / Toast 组件；
  *       提供「导入会话」与「粘贴导入」对话框。
- * 事件绑定放在 dsf.app.js（本文件只输出 HTML 结构）。
+ * 事件绑定放在 df.app.js（本文件只输出 HTML 结构）。
  * ========================================================================= */
 (function (global) {
   'use strict';
 
-  var utils = global.DSF.utils;
-  var store = global.DSF.store;
+  var utils = global.DF.utils;
+  var store = global.DF.store;
 
   var ESC = utils.escapeHtml;
 
@@ -461,7 +461,7 @@
     if (!data.folders.length) {
       nav.innerHTML = '<div class="sb-empty-hint">还没有文件夹。<br/>点击上方「新建文件夹」创建，或直接把会话拖入导入区。</div>';
     } else {
-      var state = global.DSF.state || {};
+      var state = global.DF.state || {};
       var activeId = (state.mode === 'folder' && state.folderId) ? state.folderId : null;
       nav.innerHTML = renderFolderTree(store.childrenOf(null), 0, activeId);
     }
@@ -516,10 +516,10 @@
     $('statText').textContent = st.folders + ' 个文件夹 · ' + st.sessions + ' 个会话';
 
     // 存储状态提示
-    var info = global.DSF.storageInfo || {};
+    var info = global.DF.storageInfo || {};
     var mode = info.mode || (store.isMemoryOnly() ? 'session' : 'local');
     var storageTexts = {
-      file: '自动保存到数据文件 dsf-data.json',
+      file: '自动保存到数据文件 deepseek-folder-data.json',
       local: '自动保存到浏览器本地存储',
       session: '仅本次会话有效（未持久化）'
     };
@@ -539,7 +539,7 @@
   }
 
   function renderHeader() {
-    var state = global.DSF.state || {};
+    var state = global.DF.state || {};
     var crumbs, actionsHtml = '';
 
     if (state.searchText) {
@@ -651,7 +651,7 @@
   }
 
   function renderContent() {
-    var state = global.DSF.state || {};
+    var state = global.DF.state || {};
     var data = store.data;
     var content = $('content');
 
@@ -725,7 +725,7 @@
 
     // ---------- 根视图（根目录文件夹） ----------
     if (!data.folders.length) {
-      content.innerHTML = emptyState('i-folder', '欢迎使用 DSF · DeepSeek 会话夹',
+      content.innerHTML = emptyState('i-folder', '欢迎使用 DeepSeek Folder · 会话夹',
         '把散落在几十个会话里的知识，像文件一样整理起来。',
         '<div class="es-steps">' +
           '1. 点击<b>「新建文件夹」</b>创建分类，文件夹内还能继续创建<b>子文件夹</b>；<br/>' +
@@ -769,15 +769,15 @@
     appEl.classList.toggle('sb-collapsed', collapsed);
     $('btnToggleSidebar').title = collapsed ? '展开侧边栏' : '收起侧边栏';
     // 搜索框清空按钮
-    var state = global.DSF.state || {};
+    var state = global.DF.state || {};
     $('btnClearSearch').hidden = !state.searchText;
     $('searchInput').value = state.searchText || '';
   }
 
   /* ------------------------------ 对外 API ------------------------------ */
 
-  global.DSF = global.DSF || {};
-  global.DSF.ui = {
+  global.DF = global.DF || {};
+  global.DF.ui = {
     $: $,
     icon: icon,
     toast: toast,

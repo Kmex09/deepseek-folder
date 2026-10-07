@@ -1,10 +1,10 @@
 /* =========================================================================
- * desktop/server.js — DSF 内嵌本地服务（Node，零依赖）
+ * desktop/server.js — DeepSeek Folder 内嵌本地服务（Node，零依赖）
  * -------------------------------------------------------------------------
  * 与 server.py 完全同接口：
  *   GET  /api/state  → 返回数据文件内容（不存在时返回 null）
  *   PUT  /api/state  → 校验 JSON 后原子写入数据文件
- *   其余路径          → 托管 DSF 页面静态文件（index.html / css / js）
+ *   其余路径          → 托管 DF 页面静态文件（index.html / css / js）
  * 用途：
  *   1) Electron 主进程内嵌启动（随机端口，仅本机回环）；
  *   2) 也可以直接 `node desktop/server.js [端口]` 当纯 Node 版服务器用
@@ -12,7 +12,7 @@
  *
  * 访问控制（v0.3.2 起）：
  *   数据接口是本机回环上的无鉴权写接口，若不设防，用户浏览任意网站时该网站
- *   都能直接 PUT 覆盖 dsf-data.json（简单请求不触发 CORS 预检，写入照样生效）。
+ *   都能直接 PUT 覆盖 deepseek-folder-data.json（简单请求不触发 CORS 预检，写入照样生效）。
  *   因此这里做两件事：
  *     1) 校验 Host 必须是回环地址（防 DNS rebinding）；
  *     2) 校验 Origin 必须同源 + 校验页面注入的会话 Token（防跨站请求伪造）。
@@ -27,7 +27,7 @@ const crypto = require('crypto');
 
 const API_PATH = '/api/state';
 const HTML_PATH = '/index.html';
-const TOKEN_PLACEHOLDER = '__DSF_TOKEN__';
+const TOKEN_PLACEHOLDER = '__DEEPSEEK_FOLDER_TOKEN__';
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 
 const MIME = {
@@ -45,9 +45,33 @@ const MIME = {
 
 const ALLOWED_EXT = new Set(Object.keys(MIME));
 
-/** 首次运行创建空数据文件，让“文件持久化已生效”一目了然 */
+// v0.5.0 改名前的旧数据文件名（自动迁移；迁移后旧文件保留，便于回退旧版本）
+const LEGACY_DATA_FILES = ['dsf-data.json'];
+
+/**
+ * 首次运行创建数据文件；若存在旧版本数据文件则从中迁移内容。
+ * 让“文件持久化已生效”一目了然，同时不让老用户的数据“消失”。
+ */
 function ensureDataFile(dataFile) {
   if (fs.existsSync(dataFile)) return;
+
+  for (const legacyName of LEGACY_DATA_FILES) {
+    const legacy = path.join(path.dirname(dataFile), legacyName);
+    if (!fs.existsSync(legacy)) continue;
+    try {
+      const payload = fs.readFileSync(legacy, 'utf8');
+      JSON.parse(payload); // 校验是合法 JSON 再迁移
+      fs.mkdirSync(path.dirname(dataFile), { recursive: true });
+      const tmp = dataFile + '.tmp';
+      fs.writeFileSync(tmp, payload, 'utf8');
+      fs.renameSync(tmp, dataFile);
+      console.log('[deepseek-folder] 已从旧数据文件迁移：' + legacyName + ' → ' + path.basename(dataFile));
+      return;
+    } catch (e) {
+      console.log('[deepseek-folder] 旧数据文件迁移失败（将新建空数据文件）：' + e.message);
+    }
+  }
+
   const base = {
     v: 1,
     savedAt: Date.now(),
@@ -114,7 +138,7 @@ function checkOrigin(req) {
 
 /** 页面内联注入的 Token：必须在 Origin 允许的前提下才校验 */
 function tokenAllowed(req, token) {
-  return String(req.headers['x-dsf-token'] || '') === token;
+  return String(req.headers['x-deepseek-folder-token'] || '') === token;
 }
 
 /**
@@ -199,7 +223,7 @@ function createServer(opts) {
       return send(res, 204, '', null, {
         'Access-Control-Allow-Origin': req.headers.origin || 'null',
         'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, X-DSF-Token',
+        'Access-Control-Allow-Headers': 'Content-Type, X-DeepSeek-Folder-Token',
         'Access-Control-Max-Age': '600',
         Vary: 'Origin'
       });
@@ -209,11 +233,11 @@ function createServer(opts) {
       // —— 数据接口访问控制：Origin 同源 + Token 匹配 ——
       const o = checkOrigin(req);
       if (o.reject) {
-        log('[dsf] 已拒绝非同源数据接口请求（Origin: ' + req.headers.origin + '）');
+        log('[deepseek-folder] 已拒绝非同源数据接口请求（Origin: ' + req.headers.origin + '）');
         return reject(req, res, '{"error":"forbidden origin"}');
       }
       if (!tokenAllowed(req, token)) {
-        log('[dsf] 已拒绝缺少有效令牌的数据接口请求（' + req.method + ' ' + pathname + '）');
+        log('[deepseek-folder] 已拒绝缺少有效令牌的数据接口请求（' + req.method + ' ' + pathname + '）');
         return reject(req, res, '{"error":"forbidden token"}');
       }
       const cors = o.origin ? { 'Access-Control-Allow-Origin': o.origin, Vary: 'Origin' } : null;
@@ -233,11 +257,11 @@ function createServer(opts) {
           try {
             const payload = Buffer.concat(chunks).toString('utf8');
             writeState(payload);
-            log('[dsf] 数据已保存 → ' + dataFile);
+            log('[deepseek-folder] 数据已保存 → ' + dataFile);
             onSave('save'); // 仅供调用方（桌面版自检）观察落盘事件
             send(res, 200, '{"ok":true}', null, cors);
           } catch (e) {
-            log('[dsf] 保存失败：' + e.message);
+            log('[deepseek-folder] 保存失败：' + e.message);
             send(res, 500, JSON.stringify({ error: String(e.message || e) }), null, cors);
           }
         });
@@ -252,7 +276,7 @@ function createServer(opts) {
     serveStatic(req, res, pathname);
   });
 
-  server.dsfFlush = onFlush; // 供主进程在退出前主动落盘
+  server.dfFlush = onFlush; // 供主进程在退出前主动落盘
   return server;
 }
 
@@ -261,21 +285,21 @@ module.exports = { createServer, ensureDataFile, MIME, API_PATH, TOKEN_PLACEHOLD
 /* ------------------------- 直接运行：纯 Node 服务器 ------------------------- */
 if (require.main === module) {
   const rootDir = path.join(__dirname, '..');
-  const dataFile = path.join(rootDir, 'dsf-data.json');
-  const port = Number(process.argv[2] || process.env.DSF_PORT || 8000);
+  const dataFile = path.join(rootDir, 'deepseek-folder-data.json');
+  const port = Number(process.argv[2] || process.env.DEEPSEEK_FOLDER_PORT || 8000);
 
   const server = createServer({ rootDir, dataFile, log: (m) => console.log(m) });
   server.listen(port, '127.0.0.1', () => {
     const url = 'http://127.0.0.1:' + port + '/';
     console.log('');
     console.log('=====================================================');
-    console.log('  DSF 服务器已启动（Node 版，无需 Python）');
+    console.log('  DeepSeek Folder 服务器已启动（Node 版，无需 Python）');
     console.log('  打开：   ' + url);
     console.log('  数据文件： ' + dataFile);
     console.log('  关闭：   在此窗口按 Ctrl+C');
     console.log('=====================================================');
     console.log('');
-    if (process.env.DSF_NO_BROWSER !== '1') {
+    if (process.env.DEEPSEEK_FOLDER_NO_BROWSER !== '1') {
       const cmd = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
         : process.platform === 'darwin' ? ['open', [url]]
           : ['xdg-open', [url]];
@@ -284,7 +308,7 @@ if (require.main === module) {
     }
   });
   server.on('error', (e) => {
-    console.error('[dsf] 启动失败：' + e.message);
+    console.error('[deepseek-folder] 启动失败：' + e.message);
     process.exit(1);
   });
 }

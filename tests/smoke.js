@@ -2,7 +2,7 @@
  * tests/smoke.js — 无浏览器冒烟测试
  * -------------------------------------------------------------------------
  * 用法：node tests/smoke.js
- * 用最小化的 window / localStorage 桩加载 dsf.utils.js 与 dsf.store.js，
+ * 用最小化的 window / localStorage 桩加载 df.utils.js 与 df.store.js，
  * 对核心数据流与链接解析做断言（不依赖真实 DOM）。
  * ========================================================================= */
 'use strict';
@@ -58,12 +58,12 @@ function load(file) {
   vm.runInContext(code, sandbox, { filename: file });
 }
 
-load('js/dsf.utils.js');
-load('js/dsf.store.js');
+load('js/df.utils.js');
+load('js/df.store.js');
 
-const DSF = sandbox.window.DSF;
-const utils = DSF.utils;
-const store = DSF.store;
+const DF = sandbox.window.DF;
+const utils = DF.utils;
+const store = DF.store;
 
 /* ---------- 简单断言工具 ---------- */
 let passed = 0, failed = 0;
@@ -162,8 +162,8 @@ section('序列化持久化');
 const json1 = store.exportJson();
 assert(typeof json1 === 'string' && JSON.parse(json1).folders.length === 1, '导出 JSON 正常');
 const backup = JSON.stringify(JSON.parse(json1));
-load('js/dsf.store.js'); // 重新加载（同沙箱覆盖 store 实例，验证从 localStorage 恢复）
-const store2 = sandbox.window.DSF.store;
+load('js/df.store.js'); // 重新加载（同沙箱覆盖 store 实例，验证从 localStorage 恢复）
+const store2 = sandbox.window.DF.store;
 assert(store2.stats().folders === 1, '重载后从 localStorage 恢复 1 个文件夹');
 store2.importJson(backup);
 assert(store2.stats().folders === 1 && store2.stats().sessions === 1, '导入备份 JSON 覆盖成功');
@@ -319,6 +319,48 @@ store2.deleteFolder(orderFolder.id);
 const archived = store2.data.recentClosed.slice(0, 3).map((r) => r.title);
 assert(archived.join(',') === '顺序0,顺序1,顺序2',
   '级联删除后归档顺序与原顺序一致（实际 ' + archived.join(',') + '）');
+
+/* =========================================================================
+ * v0.5.0 项目改名（DSF → DeepSeek Folder）：旧存储键自动迁移
+ * ========================================================================= */
+
+section('改名迁移：只有旧键时自动迁移');
+delete mem['deepseek-folder.data.v1'];
+delete mem['dsf.data.v1'];
+mem['dsf.data.v1'] = JSON.stringify({
+  v: 1,
+  savedAt: Date.now() - 1000,
+  folders: [{ id: 'legacy-f1', name: '旧版文件夹', parentId: null, createdAt: 1, pinned: false }],
+  sessions: [{
+    id: 'legacy-s1', folderId: 'legacy-f1', title: '旧版会话',
+    url: 'https://chat.deepseek.com/a/chat/s/legacy1',
+    createdAt: 1, updatedAt: 1, lastOpenedAt: null, pinned: false
+  }],
+  recentClosed: [],
+  settings: {}
+});
+load('js/df.store.js'); // 重新加载 → 新实例应从旧键读取
+const store3 = sandbox.window.DF.store;
+assert(store3.stats().folders === 1 && store3.stats().sessions === 1,
+  '旧键数据被完整读取（1 文件夹 / 1 会话）');
+assert(store3.wasMigrated() === true, 'store.wasMigrated() 报告已迁移');
+assert(!!mem['deepseek-folder.data.v1'], '迁移后写入了新键 deepseek-folder.data.v1');
+const migratedBack = JSON.parse(mem['deepseek-folder.data.v1']);
+assert(migratedBack.folders[0].name === '旧版文件夹' && migratedBack.sessions[0].title === '旧版会话',
+  '新键内容与旧数据一致');
+assert(!!mem['dsf.data.v1'], '旧键保留未删除（可回退旧版本）');
+
+section('改名迁移：新键存在时优先且不误报');
+mem['deepseek-folder.data.v1'] = JSON.stringify({
+  v: 1, savedAt: Date.now(),
+  folders: [{ id: 'new-f1', name: '新版文件夹', parentId: null, createdAt: 1, pinned: false }],
+  sessions: [], recentClosed: [], settings: {}
+});
+load('js/df.store.js');
+const store4 = sandbox.window.DF.store;
+assert(store4.stats().folders === 1 && store4.data.folders[0].name === '新版文件夹',
+  '新键存在时直接使用新键（不被旧键覆盖）');
+assert(store4.wasMigrated() === false, '未发生迁移时不误报迁移');
 
 console.log('\n========================================');
 console.log('结果：通过 ' + passed + ' 项，失败 ' + failed + ' 项');

@@ -1,9 +1,14 @@
-# DSF 架构设计文档（ARCHITECTURE.md）
+# DeepSeek Folder 架构设计文档（ARCHITECTURE.md）
 
-> 版本：v0.3.2 · 2026-09-27 · 配套代码：本仓库 `index.html` + `js/` + `css/` + `server.py` + `desktop/`
+> 版本：v0.5.0 · 2026-09-27 · 配套代码：本仓库 `index.html` + `js/` + `css/` + `server.py` + `desktop/`
 
-本文档说明 **DSF（DeepSeek Session Folder）** 的总体设计：需求映射、目录分层、
+本文档说明 **DeepSeek Folder** 的总体设计：需求映射、目录分层、
 数据模型、关键流程、设计取舍与已知限制，以及测试与演进路线。
+
+> **命名历史**：项目原名 DSF（DeepSeek Session Folder）/“DeepSeek 会话夹”，
+> v0.5.0 起统一更名为 **DeepSeek Folder**（中文副名“DeepSeek 会话夹”），
+> 代码命名空间由 `DSF` 改为 `DF`。改名涉及的三处持久化位置都做了**自动迁移**，
+> 详见 §3.1。
 
 ---
 
@@ -13,7 +18,7 @@
 
 | AGENT.txt 需求 | 实现 |
 | --- | --- |
-| 网页版“文件夹”，存 DeepSeek 会话链接，按钮直达新窗口 | 每个「会话」卡片保存一条 URL，点击即 `window.open(url, '_blank')` 直达原会话（`js/dsf.app.js → openSession`、`store.openSession`） |
+| 网页版“文件夹”，存 DeepSeek 会话链接，按钮直达新窗口 | 每个「会话」卡片保存一条 URL，点击即 `window.open(url, '_blank')` 直达原会话（`js/df.app.js → openSession`、`store.openSession`） |
 | 拖拽 DeepSeek 会话按钮到导入区，一键粘贴链接 | 顶部常驻「导入区」：接收拖拽的 `text/uri-list / text/plain / text/html / 文件`；另有「粘贴链接导入」多行对话框 |
 | 手动创建分类文件夹、手动把会话放入不同文件夹 | 文件夹的创建 / 重命名 / 删除；会话支持改名、移动（拖拽到文件夹 + “移动到…”选择器） |
 | 文件资源管理器式体验 | 右侧 3/4 主区：根视图 = 文件夹网格；点入文件夹 = 会话卡片网格；面包屑导航 |
@@ -21,7 +26,7 @@
 | 手动 pin 常用文件夹与会话 | 会话 / 文件夹卡片及文件夹顶栏的 ☆ 按钮切换 `pinned` 状态，固定项集中显示在侧边栏「常用固定」 |
 | 自动保存最近关闭的会话 | 「关闭」会话（从文件夹移除）→ 自动写入 `recentClosed` 归档并显示于侧边栏，可一键恢复到原文件夹（见 §4.3 语义说明） |
 | 子文件夹（v0.2.0 迭代需求）：文件夹中可继续创建子文件夹 | 数据模型引入 `parentId` 树形结构；文件夹视图内展示「子文件夹」区块与新建入口；侧边栏目录树分层缩进、可折叠；文件夹支持移动（含防环保护）与整树级联删除（见 §4.5） |
-| 桌面版（v0.3.0 迭代需求）：更简便的本地存储 | Electron 封装：主进程内嵌与 `server.py` 同接口的本地服务，窗口加载 `http://127.0.0.1:<随机端口>/`，页面零改动即进入“数据文件”模式；数据落在 `%APPDATA%\DSF 会话夹\dsf-data.json`，无需授权与手动保存（见 §2.1） |
+| 桌面版（v0.3.0 迭代需求）：更简便的本地存储 | Electron 封装：主进程内嵌与 `server.py` 同接口的本地服务，窗口加载 `http://127.0.0.1:<随机端口>/`，页面零改动即进入“数据文件”模式；数据落在 `%APPDATA%\DeepSeek Folder\deepseek-folder-data.json`，无需授权与手动保存（见 §2.1） |
 | 撰写架构与更新文档 | 本文件 + `CHANGELOG.md` + 根 `README.md` |
 
 ## 2. 目录与分层
@@ -30,21 +35,21 @@
 
 | 形态 | 启动方式 | 页面地址 | 数据位置 |
 | --- | --- | --- | --- |
-| 桌面版（推荐） | `npm start`（Electron） | `http://127.0.0.1:<随机端口>/`（内嵌服务） | `%APPDATA%\DSF 会话夹\dsf-data.json` |
-| 网页版 + 服务 | `start-dsf.cmd` / `python server.py` / `node desktop/server.js` | `http://127.0.0.1:8000/` | 项目目录 `dsf-data.json` |
+| 桌面版（推荐） | `npm start`（Electron） | `http://127.0.0.1:<随机端口>/`（内嵌服务） | `%APPDATA%\DeepSeek Folder\deepseek-folder-data.json` |
+| 网页版 + 服务 | `start-deepseek-folder.cmd` / `python server.py` / `node desktop/server.js` | `http://127.0.0.1:8000/` | 项目目录 `deepseek-folder-data.json` |
 | 纯静态 | 双击 `index.html` | `file://…/index.html` | 浏览器 localStorage |
 
 页面代码刻意保持**零构建、零依赖、经典脚本**：按顺序加载四个 JS 文件，共享同一个
-`window.DSF` 命名空间；`file://` 直接打开也能运行（不使用 ES Module，规避本地文件
+`window.DeepSeek Folder` 命名空间；`file://` 直接打开也能运行（不使用 ES Module，规避本地文件
 CORS 限制）。桌面版只是给它套了一层原生外壳，**没有改动任何前端逻辑**。
 
 ```
 index.html          入口：页面骨架 + 内联 SVG 图标库（<symbol> + <use>）
 css/style.css       样式：CSS 变量明暗双主题；Grid 布局（286px 侧栏 + 弹性主区）
-js/dsf.utils.js     工具层   —— 无状态纯函数（UID、转义、链接识别/归一化）
-js/dsf.store.js     数据层   —— 唯一数据源 + 浏览器/数据文件双持久化 + 变更订阅
-js/dsf.ui.js        渲染层   —— 读 store+state 输出 DOM；弹窗/Toast/选择器组件
-js/dsf.app.js       主控层   —— 视图路由、事件委托、拖拽 DnD、搜索、备份、文件同步
+js/df.utils.js     工具层   —— 无状态纯函数（UID、转义、链接识别/归一化）
+js/df.store.js     数据层   —— 唯一数据源 + 浏览器/数据文件双持久化 + 变更订阅
+js/df.ui.js        渲染层   —— 读 store+state 输出 DOM；弹窗/Toast/选择器组件
+js/df.app.js       主控层   —— 视图路由、事件委托、拖拽 DnD、搜索、备份、文件同步
 desktop/main.js     Electron 主进程 —— 内嵌服务 + 窗口 + 悬浮窗 + 外链转交 + 自检
 desktop/preload.js  主窗口 preload —— contextBridge 暴露悬浮窗开关 / 导入回调
 desktop/quick.html  悬浮窗界面 —— 168×66 无边框胶囊，仅一条拖放区
@@ -55,7 +60,7 @@ assets/             应用图标（icon-256 窗口/任务栏、icon-64 网页 fa
 build/icon.ico      打包用多尺寸 Windows 图标（electron-builder buildResources 约定目录）
 tools/make_icons.py 图标生成脚本 —— 一张图片 → 裁方/缩放 → ico + 多尺寸 png
 server.py           网页版后端（Python 标准库）—— 与 desktop/server.js 同接口
-start-dsf.cmd/.sh   网页版一键启动（纯 ASCII，避免 cmd 代码页问题）
+start-deepseek-folder.cmd/.sh   网页版一键启动（纯 ASCII，避免 cmd 代码页问题）
 package.json        桌面版依赖与脚本（start / smoke / web / dist）
 tests/smoke.js      数据层与链接解析冒烟测试
 tests/desktop-server.js  内嵌服务接口测试（含目录穿越防护）
@@ -65,7 +70,7 @@ docs/…              文档
 依赖方向（单向，禁止反向）：
 
 ```
-Electron 主进程 ──嵌入──▶ desktop/server.js ──读写──▶ %APPDATA%/dsf-data.json
+Electron 主进程 ──嵌入──▶ desktop/server.js ──读写──▶ %APPDATA%/deepseek-folder-data.json
                                   ▲
 浏览器渲染进程: app ──调用──▶ ui ──读取──▶ store ──写入──▶ localStorage
                                   └──(同源 fetch)──▶ /api/state（内嵌服务 或 server.py）
@@ -111,12 +116,12 @@ Electron 主进程 ──嵌入──▶ desktop/server.js ──读写──▶
 浏览器里拖动会话链接
         │  （拖到屏幕角落的小窗，无需主窗口可见）
         ▼
-quick.html / quick.js —— DSF.utils 识别 *.deepseek.com 链接
-        │  IPC: dsf:quick-drop（原始 uri-list / plain / html）
+quick.html / quick.js —— DeepSeek Folder.utils 识别 *.deepseek.com 链接
+        │  IPC: deepseek-folder:quick-drop（原始 uri-list / plain / html）
         ▼
 主进程 handleQuickDrop()
         ├─ restoreMain()：restore() + show() + focus()   ← 自动唤起被最小化的主体
-        └─ IPC: dsf:quick-import → 页面复用既有 handleExternalDrop()
+        └─ IPC: deepseek-folder:quick-import → 页面复用既有 handleExternalDrop()
                                      （文件夹视图内直接存进该文件夹，否则弹导入对话框）
 ```
 
@@ -132,11 +137,11 @@ quick.html / quick.js —— DSF.utils 识别 *.deepseek.com 链接
 - 开关与窗位存 `desktop-settings.json`（主进程持有），**页面还没加载时开关就已生效**；
 - 窗口用 `skipTaskbar: true` 不进任务栏；顶部 15px 为拖动条（`-webkit-app-region: drag`），
   拖动后位置落盘，并被夹回当前显示器工作区内；
-- 主窗口 preload 用 `contextBridge` 暴露最小 API（`dsfDesktop.quickWindow` /
-  `dsfDesktop.onQuickImport`），页面侧**特性检测**使用：网页版没有 `window.dsfDesktop`，
+- 主窗口 preload 用 `contextBridge` 暴露最小 API（`dfDesktop.quickWindow` /
+  `dfDesktop.onQuickImport`），页面侧**特性检测**使用：网页版没有 `window.dfDesktop`，
   整段逻辑直接跳过，浏览器中的行为完全不变；
 - 转发内容按长度截断（uri-list 20KB、文本/HTML 200KB），避免异常大包；
-- 悬浮窗自带的 ✕ 关闭后会通过 `dsf:quick-changed` 反向同步主界面按钮状态。
+- 悬浮窗自带的 ✕ 关闭后会通过 `deepseek-folder:quick-changed` 反向同步主界面按钮状态。
 
 
 启动时 `bootstrapFileMode()` 先 GET `/api/state`：若数据文件存在，与浏览器存储
@@ -148,7 +153,7 @@ quick.html / quick.js —— DSF.utils 识别 *.deepseek.com 链接
 
 `/api/state` 是回环地址上的**写接口**。若不设防，用户浏览任意网站时，该网站可以
 用「简单请求」（`Content-Type: text/plain`，不触发 CORS 预检）直接 PUT 覆盖
-`dsf-data.json` —— 响应虽然读不到，破坏却已经落地。因此两个后端（`server.py` /
+`deepseek-folder-data.json` —— 响应虽然读不到，破坏却已经落地。因此两个后端（`server.py` /
 `desktop/server.js`）在数据接口上做三层校验，且**拒绝时先回完整响应再断连**
 （否则客户端会因“请求体没发完”而与服务端互相等待）：
 
@@ -156,14 +161,14 @@ quick.html / quick.js —— DSF.utils 识别 *.deepseek.com 链接
 | --- | --- | --- |
 | `Host` 必须是 `127.0.0.1 / localhost / [::1]` | 防 DNS rebinding | 无需配合 |
 | `Origin`（若携带）必须与 `Host` 同源 | 防跨站请求伪造 | 无需配合（同源 fetch 自动满足） |
-| `X-DSF-Token` 必须匹配本次会话令牌 | 最终闸门 | 服务端渲染 `index.html` 时把 `__DSF_TOKEN__` 占位符替换为随机令牌，页面从 `<meta name="dsf-token">` 读取并放进请求头 |
+| `X-DeepSeek-Folder-Token` 必须匹配本次会话令牌 | 最终闸门 | 服务端渲染 `index.html` 时把 `__DEEPSEEK_FOLDER_TOKEN__` 占位符替换为随机令牌，页面从 `<meta name="df-token">` 读取并放进请求头 |
 
 推论：`index.html` 里**不存任何密钥**（磁盘上始终是占位符），令牌只存在于服务进程内存与
 当次响应的 HTML 中；`file://` 直开时占位符不变、无后端可连，逻辑自动退化为无令牌模式。
 两个后端另有共同的静态托管防护：目录穿越、隐藏目录、`node_modules`、以及**数据文件本身**
-（`GET /dsf-data.json` 也返回 403，页面只经 `/api/state` 读写）。
+（`GET /deepseek-folder-data.json` 也返回 403，页面只经 `/api/state` 读写）。
 
-## 3. 数据模型（浏览器存储 key `dsf.data.v1` / 数据文件 `dsf-data.json` 同构）
+## 3. 数据模型（浏览器存储 key `deepseek-folder.data.v1` / 数据文件 `deepseek-folder-data.json` 同构）
 
 ```jsonc
 {
@@ -215,6 +220,24 @@ quick.html / quick.js —— DSF.utils 识别 *.deepseek.com 链接
   带非空查询串的地址仍视为不同条目，避免误合并不同会话；
 - 读取时 `migrate()` 做结构修补（旧平铺数据自动补 `parentId: null`），兼容升级。
 
+#### 3.1 项目改名与数据迁移（v0.5.0）
+
+DSF → DeepSeek Folder 的改名会同时改变三个**持久化位置**，逐一做自动迁移
+（**复制而非移动**，旧位置原样保留，因此回退旧版本仍可用）：
+
+| 位置 | 旧 | 新 | 迁移实现 |
+| --- | --- | --- | --- |
+| 桌面版 userData | `%APPDATA%\DSF 会话夹\dsf-data.json` | `%APPDATA%\DeepSeek Folder\deepseek-folder-data.json` | `main.js → migrateLegacyUserData()`：启动、读取数据之前完成；`desktop-settings.json` 一并复制 |
+| 项目目录数据文件 | `dsf-data.json` | `deepseek-folder-data.json` | `server.py` / `desktop/server.js` 的 `ensure_data_file()`：新文件不存在且旧文件是合法 JSON 时迁移 |
+| 浏览器 localStorage | `dsf.data.v1` | `deepseek-folder.data.v1` | `df.store.js → load()`：新键为空时读旧键，`store.wasMigrated()` 供页面提示 |
+
+userData 目录名来自 `package.json` 的 `productName`，所以**改名本身就会换目录**，
+这也是必须做启动期迁移的原因。其它随之更名的技术标识（MIME 类型、IPC 通道、
+令牌头、环境变量、备份文件名前缀）不涉及持久化，无需迁移。
+
+> 自检 / 自动化场景可用环境变量 `DEEPSEEK_FOLDER_SKIP_MIGRATE=1` 跳过桌面版目录迁移，
+> 让测试环境不受真实用户数据影响（`npm run smoke:quick` 即依赖它保持确定性）。
+
 ### 4. 关键流程
 
 #### 4.1 导入（拖拽 / 粘贴 / 文件）
@@ -243,8 +266,8 @@ drop 事件读取 dataTransfer：uri-list + text/plain + text/html(+ 文件→Fi
 - **直达**：点击会话卡片（或其 ↗ 按钮）→ `window.open(url, '_blank', 'noopener')`，
   同时刷新 `lastOpenedAt`；
 - **移动会话**：拖拽会话卡片到侧边栏文件夹 / 文件夹卡片（内部 DnD 走自定义 MIME
-  `application/x-dsf-session`），或使用卡片上「移动到…」选择器；
-- **移动文件夹**：文件夹卡片可拖拽（MIME `application/x-dsf-folder`）或通过
+  `application/x-deepseek-folder-session`），或使用卡片上「移动到…」选择器；
+- **移动文件夹**：文件夹卡片可拖拽（MIME `application/x-deepseek-folder`）或通过
   「移动到…」选择器改变父级 —— 移动的是**整棵子树**，后代层级保持不变；
   数据层 `moveFolder()` 内置防环校验（不能移入自身 / 自己的后代），
   拖拽落点与选择器均据此拦截并提示。
@@ -254,15 +277,15 @@ drop 事件读取 dataTransfer：uri-list + text/plain + text/html(+ 文件→Fi
 原始需求描述“自动保存最近关闭的会话”。浏览器存在两条硬限制：
 
 1. 跨站无法读取 / 监听 DeepSeek 标签页的状态（无 CORS、无跨标签事件）；
-2. 打开的是新标签页，DSF 无法感知用户何时关掉那个标签。
+2. 打开的是新标签页，DeepSeek Folder 无法感知用户何时关掉那个标签。
 
-因此“关闭”在 DSF 中落地为**用户在 DSF 内把某会话从文件夹中移除（卡片 ✕ / 删除文件夹）**
+因此“关闭”在 DeepSeek Folder 中落地为**用户在 DeepSeek Folder 内把某会话从文件夹中移除（卡片 ✕ / 删除文件夹）**
 这一可感知事件：会话立即进入侧边栏「最近关闭」归档（上限 50），可一键恢复。
 删除文件夹 = 级联删除整棵子树，子树内全部会话一并归档。恢复时按快照定位：
 原文件夹（乃至原父级）仍在则回到原位；已删除则自动重建同名文件夹
 （父级仍存在则挂回父级，否则放根目录），形成“文件夹-会话”双层防误删。
 
-> 如未来接入扩展（浏览器插件），可在 DeepSeek 页面侧监听标签关闭后再回写 DSF。
+> 如未来接入扩展（浏览器插件），可在 DeepSeek 页面侧监听标签关闭后再回写 DeepSeek Folder。
 
 #### 4.4 会话标题从哪来？
 
@@ -306,7 +329,7 @@ drop 事件读取 dataTransfer：uri-list + text/plain + text/html(+ 文件→Fi
   全量重绘不会丢失监听；目录树折叠箭头独立成 `toggle-folder` 动作，与行点击导航解耦；
 - **拖拽策略**：`document` 级 `dragstart/dragover/drop` 委托，用
   `data-drop-folder` 标记落点；内部移动通过 MIME type 区分
-  （`application/x-dsf-session` = 会话、`application/x-dsf-folder` = 文件夹），
+  （`application/x-deepseek-folder-session` = 会话、`application/x-deepseek-folder` = 文件夹），
   与外部链接导入区分；文件夹落点额外做“移入自身 / 后代”防环校验；
   未命中落点时一律 `preventDefault`，避免浏览器把链接/文件直接打开在标签页；
 - **弹窗**：Promise 化的 `prompt / confirm / picker / textDialog / openImportDialog`，
@@ -321,18 +344,18 @@ drop 事件读取 dataTransfer：uri-list + text/plain + text/html(+ 文件→Fi
 
 ### 6. 安全、隐私与数据存储
 
-- **数据只在本机**：桌面版写 `%APPDATA%\DSF 会话夹\dsf-data.json`；网页版写浏览器
-  `localStorage`（key `dsf.data.v1`）与（可选）项目目录 `dsf-data.json`。
+- **数据只在本机**：桌面版写 `%APPDATA%\DeepSeek Folder\deepseek-folder-data.json`；网页版写浏览器
+  `localStorage`（key `deepseek-folder.data.v1`）与（可选）项目目录 `deepseek-folder-data.json`。
   除用户主动打开 DeepSeek 会话外不发起任何外部请求（图标均为内联 SVG）；
 - **双写与取最新**：页面同时写浏览器存储与 `/api/state`，启动时按 `savedAt` 取较新者，
-  `pagehide` / `beforeunload` / 桌面版退出前 `DSF.flush()` 兜底落盘；写入失败会显式降级
+  `pagehide` / `beforeunload` / 桌面版退出前 `DeepSeek Folder.flush()` 兜底落盘；写入失败会显式降级
   提示，绝不“静默假装保存成功”；
 - 存储可写性探测使用**独立探测键**，绝不读写正式数据键——避免误删用户数据；
 - **数据接口访问控制**：Host 回环校验 + Origin 同源校验 + 会话令牌（见 §2.2），
   拒绝跨站写入与 DNS rebinding；令牌只存在于服务进程与当次 HTML，磁盘文件不含密钥；
 - **进程隔离**：桌面版渲染进程 `contextIsolation: true`、`nodeIntegration: false`、
   `sandbox: true`，页面拿不到任何 Node/文件系统能力；文件读写只发生在主进程，
-  且服务仅监听 `127.0.0.1` 的随机端口；退出时主进程先调用页面 `DSF.flush()` 落盘再关窗；
+  且服务仅监听 `127.0.0.1` 的随机端口；退出时主进程先调用页面 `DeepSeek Folder.flush()` 落盘再关窗；
 - 内嵌服务仅托管白名单扩展名（html/css/js/json/svg/…）并拒绝目录穿越、
   隐藏目录、`node_modules` 与数据文件本身；
 - 渲染前所有用户内容经 `escapeHtml` 转义，杜绝存储型 XSS；
@@ -396,7 +419,7 @@ v0.3.2 把它们都消掉了。基准数据（Node 桩环境，400 文件夹 / 2
 启动同步采用「按 `savedAt` 取最新，否则整份覆盖」：
 
 - 先用 `file://` 或纯静态方式打开并改动过（浏览器存储的 `savedAt` 更新），
-  之后再用服务器打开 → 本地那份会**整份覆盖** `dsf-data.json`，文件里原有的数据丢失；
+  之后再用服务器打开 → 本地那份会**整份覆盖** `deepseek-folder-data.json`，文件里原有的数据丢失；
 - 多浏览器 / 多机器指向同一份数据文件时同理：谁新谁赢，且没有任何提示。
 
 彻底解决需要把「整份覆盖」改成「按 id 求并集合并 + 冲突提示」。改动会触及
@@ -408,7 +431,7 @@ v0.3.2 把它们都消掉了。基准数据（Node 桩环境，400 文件夹 / 2
 | 主题 | 现状 | 演进方向 |
 | --- | --- | --- |
 | 会话标题 | 拖入仅得 URL，手动/锚文本命名 | 浏览器扩展读取会话内容 |
-| “最近关闭”感知 | 仅在 DSF 内移除会话时归档 | 扩展在 DeepSeek 页侧监听标签关闭 |
+| “最近关闭”感知 | 仅在 DeepSeek Folder 内移除会话时归档 | 扩展在 DeepSeek 页侧监听标签关闭 |
 | 会话封面/预览 | 无 | 卡片可存用户备注 |
 | 排序 | 按插入顺序 | 自定义排序 / 最近打开优先 |
 | 多端同步 | 本地文件 + JSON 备份 | WebDAV / 浏览器同步存储 |

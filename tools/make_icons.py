@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""生成 DSF 应用图标（桌面版 exe / 窗口 / 网页 favicon）
+"""生成 DeepSeek Folder 应用图标（桌面版 exe / 窗口 / 网页 favicon）
 --------------------------------------------------------------------------
 用法：
     python tools/make_icons.py <源图片>            # 默认使用下面的 DEFAULT_SRC
@@ -53,7 +53,7 @@ def square(img):
 
 
 def main():
-    ap = argparse.ArgumentParser(description='生成 DSF 应用图标')
+    ap = argparse.ArgumentParser(description='生成 DeepSeek Folder 应用图标')
     ap.add_argument('source', nargs='?', default=DEFAULT_SRC, help='源图片路径')
     args = ap.parse_args()
 

@@ -1,5 +1,5 @@
 /* =========================================================================
- * dsf.store.js — DSF 数据存储层
+ * df.store.js — DeepSeek Folder 数据存储层
  * -------------------------------------------------------------------------
  * 单一数据源 + localStorage 持久化 + 订阅通知。
  *
@@ -24,8 +24,8 @@
 (function (global) {
   'use strict';
 
-  var utils = global.DSF.utils;
-  var STORAGE_KEY = 'dsf.data.v1';
+  var utils = global.DF.utils;
+  var STORAGE_KEY = 'deepseek-folder.data.v1';
   var RECENT_CAP = 50;   // 「最近关闭」归档上限
   var DEFAULT_TITLE = '未命名会话';
 
@@ -210,14 +210,41 @@
 
     /* ------------------------------ 持久化 ------------------------------ */
     // 探测键与正式数据键分离：绝不在加载时写/删正式数据
-    var PROBE_KEY = '__dsf_storage_probe__';
+    var PROBE_KEY = '__deepseek_folder_probe__';
+
+    // v0.5.0 项目改名（DSF → DeepSeek Folder）：读取旧键并自动迁移，避免老用户数据“消失”
+    var LEGACY_KEYS = ['dsf.data.v1'];
+    var migrated = false;
+
+    function readLegacy() {
+      for (var i = 0; i < LEGACY_KEYS.length; i++) {
+        try {
+          var raw = localStorage.getItem(LEGACY_KEYS[i]);
+          if (raw) return { raw: raw, key: LEGACY_KEYS[i] };
+        } catch (e) { /* ignore */ }
+      }
+      return null;
+    }
 
     function load() {
       if (!data) {
         var raw = null;
         try { raw = JSON.parse(localStorage.getItem(STORAGE_KEY)); }
         catch (e) { raw = null; }
+
+        if (!raw) {
+          // 新键没有数据 → 看看旧版本（DSF）留下的数据，迁移过来
+          var legacy = readLegacy();
+          if (legacy) {
+            try {
+              raw = JSON.parse(legacy.raw);
+              migrated = true;
+            } catch (e) { raw = null; }
+          }
+        }
+
         data = migrate(raw);
+
         // 用独立的探测键校验 localStorage 是否真的可写
         // （部分隐私模式 / file:// 沙箱对任何写入都会抛 SecurityError / QuotaExceeded）
         try {
@@ -226,6 +253,9 @@
         } catch (e) {
           memoryOnly = true;
         }
+
+        // 迁移成功：立刻写入新键（旧键保留不动，回退旧版本仍可用）
+        if (migrated && !memoryOnly) safeSet();
       }
       return data;
     }
@@ -258,7 +288,7 @@
     }
 
     /**
-     * 采用一份外部数据（如随 server.py 保存的 dsf-data.json）作为当前状态。
+     * 采用一份外部数据（如随 server.py 保存的 deepseek-folder-data.json）作为当前状态。
      * 只更新内存并通知重绘，不主动回写。
      */
     function hydrateFrom(parsed) {
@@ -681,6 +711,8 @@
       // 只读快照（每次读取前先确保已加载）
       get data() { return load(); },
       isMemoryOnly: function () { return memoryOnly; },
+      /** 是否本次是从旧版本（DSF）的存储键迁移过来的 */
+      wasMigrated: function () { return migrated; },
       /** 数据版本号：每次真实变动 +1（供索引/视图判断是否需要重算） */
       revision: function () { return dataRev; },
       STORAGE_KEY: STORAGE_KEY,
@@ -733,6 +765,6 @@
     return store;
   }
 
-  global.DSF = global.DSF || {};
-  global.DSF.store = createStore();
+  global.DF = global.DF || {};
+  global.DF.store = createStore();
 })(window);

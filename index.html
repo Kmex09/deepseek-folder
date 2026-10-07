@@ -4,11 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="light dark" />
-  <title>DSF · DeepSeek 会话夹</title>
+  <title>DeepSeek Folder · 会话夹</title>
   <meta name="description" content="把 DeepSeek 会话像文件一样分类管理的网页小工具：拖拽导入、文件夹归类、固定常用、找回最近关闭。" />
   <!-- 数据接口会话令牌：由本地服务（server.py / desktop/server.js）在响应时替换。
        file:// 直开时保持占位符不变，此时无后端可连，不影响使用。 -->
-  <meta name="dsf-token" content="__DSF_TOKEN__" />
+  <meta name="df-token" content="__DEEPSEEK_FOLDER_TOKEN__" />
   <link rel="icon" type="image/png" sizes="64x64" href="assets/icon-64.png" />
   <link rel="apple-touch-icon" href="assets/icon-256.png" />
   <link rel="stylesheet" href="css/style.css" />
@@ -49,8 +49,8 @@
       <div class="sb-brand">
         <span class="logo"><svg class="ic"><use href="#i-spark"/></svg></span>
         <div class="brand-text">
-          <span class="brand-name">DSF</span>
-          <span class="brand-sub">DeepSeek 会话夹</span>
+          <span class="brand-name">DeepSeek Folder</span>
+          <span class="brand-sub">会话夹 · 本地优先</span>
         </div>
       </div>
 
@@ -128,7 +128,7 @@
       <div id="modeBanner" class="mode-banner" hidden role="status">
         <svg class="ic"><use href="#i-info"/></svg>
         <span>以文件方式直接打开时，数据只存于浏览器、重启后可能丢失。建议双击
-          <b>start-dsf.cmd</b> 启动，数据将自动保存到 dsf-data.json。</span>
+          <b>start-deepseek-folder.cmd</b> 启动，数据将自动保存到 deepseek-folder-data.json。</span>
         <button type="button" class="icon-btn sm js-hide" title="知道了">
           <svg class="ic ic-sm"><use href="#i-x"/></svg>
         </button>
@@ -149,12 +149,12 @@
   <div id="modalRoot"></div>
   <div id="toastRoot" class="toast-root" aria-live="polite"></div>
 
-  <noscript><div style="padding:40px;text-align:center">DSF 需要启用 JavaScript 才能运行。</div></noscript>
+  <noscript><div style="padding:40px;text-align:center">DF 需要启用 JavaScript 才能运行。</div></noscript>
 
   <!-- 经典脚本（顺序加载，兼容 file:// 直接打开，无模块依赖） -->
-  <script src="js/dsf.utils.js"></script>
-  <script src="js/dsf.store.js"></script>
-  <script src="js/dsf.ui.js"></script>
-  <script src="js/dsf.app.js"></script>
+  <script src="js/df.utils.js"></script>
+  <script src="js/df.store.js"></script>
+  <script src="js/df.ui.js"></script>
+  <script src="js/df.app.js"></script>
 </body>
 </html>

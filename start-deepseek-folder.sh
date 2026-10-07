@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
-# DSF 一键启动（macOS / Linux）：数据服务器 + 打开浏览器
-# 数据会自动保存到本目录的 dsf-data.json
+# DeepSeek Folder 一键启动（macOS / Linux）：数据服务器 + 打开浏览器
+# 数据会自动保存到本目录的 deepseek-folder-data.json
 cd "$(dirname "$0")"
 
 if command -v python3 >/dev/null 2>&1; then
@@ -12,7 +12,7 @@ else
   exit 1
 fi
 
-echo "正在启动 DSF 数据服务器（端口 8000）..."
+echo "正在启动 DeepSeek Folder 数据服务器（端口 8000）..."
 "$PY" server.py &
 sleep 1
 

@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""DSF 一键数据服务器
+"""DF 一键数据服务器
 --------------------------------------------------------------------------
 在项目目录启动后：
-  1. 作为静态服务器托管 DSF 网页（http://127.0.0.1:8000/）；
-  2. 提供数据接口，把每次改动自动写入同目录 dsf-data.json ——
-     网页每次启动时先读取该文件恢复数据。这份文件就是 DSF 的“本地记忆”，
+  1. 作为静态服务器托管 DF 网页（http://127.0.0.1:8000/）；
+  2. 提供数据接口，把每次改动自动写入同目录 deepseek-folder-data.json ——
+     网页每次启动时先读取该文件恢复数据。这份文件就是 DeepSeek Folder 的“本地记忆”，
      换浏览器 / 清缓存 / 换端口都不会丢。
 
 用法：
   python server.py            # 默认端口 8000
   python server.py 8080       # 指定端口
-  （或直接双击 start-dsf.cmd）
+  （或直接双击 start-deepseek-folder.cmd）
 
 访问控制（v0.3.2 起）：
   /api/state 是本机回环上的无鉴权写接口，若不设防，用户浏览任意网站时该网站都能
-  直接 PUT 覆盖 dsf-data.json（简单请求不触发 CORS 预检，写入照样生效）。因此：
+  直接 PUT 覆盖 deepseek-folder-data.json（简单请求不触发 CORS 预检，写入照样生效）。因此：
     1) Host 必须是回环地址（防 DNS rebinding）；
     2) Origin 必须同源，且必须携带页面内联注入的会话 Token（防跨站请求伪造）。
   页面由本服务器托管，Token 由 index.html 占位符在响应时替换，正常使用无感。
@@ -32,10 +32,12 @@ from urllib.parse import urlparse
 from urllib.parse import unquote as urllib_parse_unquote
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(ROOT, 'dsf-data.json')
+DATA_FILE = os.path.join(ROOT, 'deepseek-folder-data.json')
+# v0.5.0 改名前的旧数据文件名（用于自动迁移，迁移后旧文件保留）
+LEGACY_DATA_FILES = ('dsf-data.json',)
 API_PATH = '/api/state'
 INDEX_FILE = 'index.html'
-TOKEN_PLACEHOLDER = '__DSF_TOKEN__'
+TOKEN_PLACEHOLDER = '__DEEPSEEK_FOLDER_TOKEN__'
 SESSION_TOKEN = secrets.token_hex(16)
 LOOPBACK_HOSTS = ('127.0.0.1', 'localhost', '[::1]', '::1')
 
@@ -63,8 +65,8 @@ def log(msg):
             pass
 
 
-class DSFHandler(SimpleHTTPRequestHandler):
-    server_version = 'DSF/0.3.2'
+class DFHandler(SimpleHTTPRequestHandler):
+    server_version = 'DF/0.3.2'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=ROOT, **kwargs)
@@ -114,7 +116,7 @@ class DSFHandler(SimpleHTTPRequestHandler):
         if not origin_ok:
             self._deny('forbidden origin')
             return False
-        if self.headers.get('X-DSF-Token') != SESSION_TOKEN:
+        if self.headers.get('X-DeepSeek-Folder-Token') != SESSION_TOKEN:
             self._deny('forbidden token')
             return False
         return True
@@ -177,7 +179,7 @@ class DSFHandler(SimpleHTTPRequestHandler):
             self._send(204, b'', extra={
                 'Access-Control-Allow-Origin': origin,
                 'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, X-DSF-Token',
+                'Access-Control-Allow-Headers': 'Content-Type, X-DeepSeek-Folder-Token',
                 'Access-Control-Max-Age': '600',
                 'Vary': 'Origin',
             })
@@ -248,9 +250,31 @@ def _open_browser(url):
 
 def ensure_data_file():
     """首次启动时创建空数据文件：
-    让“服务器模式是否生效”可一眼确认（目录里出现 dsf-data.json）。"""
+    让“服务器模式是否生效”可一眼确认（目录里出现 deepseek-folder-data.json）。
+
+    v0.5.0 项目改名（DSF → DeepSeek Folder）：若新数据文件不存在但旧文件
+    （dsf-data.json）在，则从旧文件迁移内容，旧文件保留以便回退旧版本。
+    """
     if os.path.exists(DATA_FILE):
         return
+
+    for legacy_name in LEGACY_DATA_FILES:
+        legacy = os.path.join(ROOT, legacy_name)
+        if not os.path.exists(legacy):
+            continue
+        try:
+            with open(legacy, 'r', encoding='utf-8') as fh:
+                payload = fh.read()
+            json.loads(payload)  # 校验是合法 JSON 再迁移
+            tmp = DATA_FILE + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as fh:
+                fh.write(payload)
+            os.replace(tmp, DATA_FILE)
+            log('已从旧数据文件迁移：%s → %s（旧文件保留）' % (legacy_name, os.path.basename(DATA_FILE)))
+            return
+        except Exception as exc:
+            log('旧数据文件迁移失败（将新建空数据文件）：%s' % exc)
+
     import time
     base = {
         'v': 1,
@@ -274,10 +298,10 @@ def main():
         except ValueError:
             log('用法：python server.py [端口]，默认 8000')
             sys.exit(1)
-    port = int(os.environ.get('DSF_PORT', port))
+    port = int(os.environ.get('DEEPSEEK_FOLDER_PORT', port))
 
     try:
-        server = ThreadingHTTPServer(('127.0.0.1', port), DSFHandler)
+        server = ThreadingHTTPServer(('127.0.0.1', port), DFHandler)
     except OSError:
         log('端口 %d 被占用：请换端口（python server.py 8080），'
             '或先关闭占用该端口的程序。' % port)
@@ -287,25 +311,25 @@ def main():
 
     log('')
     log('=====================================================')
-    log('  DSF 服务器已启动')
+    log('  DeepSeek Folder 服务器已启动')
     log('  打开：   http://127.0.0.1:%d/' % port)
     log('  数据文件： %s' % DATA_FILE)
     log('  关闭：   在此窗口按 Ctrl+C')
     log('=====================================================')
     log('')
     log('提示：每次改动都会自动保存到上面的数据文件；')
-    log('重启电脑后请再次双击 start-dsf.cmd 打开，数据会自动恢复。')
+    log('重启电脑后请再次双击 start-deepseek-folder.cmd 打开，数据会自动恢复。')
     log('')
 
     url = 'http://127.0.0.1:%d/' % port
-    # 稍等片刻让服务器就绪，再自动打开默认浏览器（DSF_NO_BROWSER=1 可关闭）
-    if os.environ.get('DSF_NO_BROWSER') != '1':
+    # 稍等片刻让服务器就绪，再自动打开默认浏览器（DEEPSEEK_FOLDER_NO_BROWSER=1 可关闭）
+    if os.environ.get('DEEPSEEK_FOLDER_NO_BROWSER') != '1':
         threading.Timer(1.0, lambda: _open_browser(url)).start()
 
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        log('已停止。数据已保存在 dsf-data.json。')
+        log('已停止。数据已保存在 deepseek-folder-data.json。')
     finally:
         server.server_close()
 
