@@ -38,12 +38,15 @@ npm start          # 打开 DSF 桌面应用
 - 数据自动保存到 **`%APPDATA%\DSF 会话夹\dsf-data.json`**（macOS/Linux 为对应
   userData 目录）：重启电脑、清浏览器缓存都不受影响，**无需任何手动保存或授权**；
 - 点击会话卡片时，DeepSeek 会话用**系统默认浏览器**打开（不在应用内开窗）；
+- **快速导入悬浮窗**：侧边栏底部「悬浮窗」按钮开启后，主窗口不在前台（最小化 / 被
+  浏览器挡住）时，屏幕角落会保留一个**始终置顶**的迷你窗 —— 把浏览器的会话链接直接
+  拖进去，即自动唤起主窗口并完成导入；窗口位置会被记住，点小窗本体也能唤起主窗口；
 - 快捷键：`F5` / `Ctrl+R` 刷新、`F12` 开发者工具、`F11` 全屏、`Ctrl+W` 关闭；
-- 自检：`npm run smoke`（启动并校验数据接口）；
+- 自检：`npm run smoke`（启动并校验数据接口）、`npm run smoke:quick`（悬浮窗 8 项检查）；
   `npm run smoke:write` 后再 `npm run smoke:persist`（写入 → 新进程重启 → 校验数据仍在）；
 - 打包 exe：`npm install -D electron-builder && npm run dist`，产物在 `dist/`：
-  - `DSF 会话夹 0.3.2.exe` —— **便携版**，拷到哪都能双击运行；
-  - `DSF 会话夹 Setup 0.3.2.exe` —— 安装包（含开始菜单 / 桌面快捷方式）。
+  - `DSF 会话夹 0.4.0.exe` —— **便携版**，拷到哪都能双击运行；
+  - `DSF 会话夹 Setup 0.4.0.exe` —— 安装包（含开始菜单 / 桌面快捷方式）。
   已实测：便携版 exe 连续两次独立运行（写入 → 重启校验）数据均正确保留。
 - 换图标：把任意图片传给生成脚本，再重新打包即可：
   ```bash
@@ -133,6 +136,7 @@ npm test                      # 一次跑完下面两个 Node 测试套件
 node tests/smoke.js           # 数据层 / 链接解析 / 索引缓存 / 批量提交（87 项断言）
 node tests/desktop-server.js  # 内嵌服务接口 + 访问控制（23 项断言）
 npm run smoke                 # 桌面版启动自检
+npm run smoke:quick           # 快速导入悬浮窗自检（8 项）
 npm run smoke:write && npm run smoke:persist   # 桌面版“写入 → 重启 → 数据仍在”自检
 ```
 

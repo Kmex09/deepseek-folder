@@ -1,7 +1,7 @@
 {
   "name": "dsf-desktop",
   "productName": "DSF 会话夹",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "private": true,
   "description": "DSF · DeepSeek 会话夹 桌面版（Electron）。复用 web 版页面，内嵌本地服务，数据自动保存到用户数据目录，无需任何手动保存/授权。",
   "author": "DSF",
@@ -12,6 +12,7 @@
     "smoke": "electron . --smoke",
     "smoke:write": "electron . --smoke-write",
     "smoke:persist": "electron . --smoke-expect-persist",
+    "smoke:quick": "electron . --smoke-quick",
     "web": "node desktop/server.js",
     "dist": "electron-builder --win"
   },

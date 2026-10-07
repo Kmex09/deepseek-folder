@@ -729,12 +729,68 @@
     markBooted(); // 同步完成（成功或失败）后，后续改动才允许回写数据文件
   }
 
+  /* ------------- 桌面版集成：快速导入悬浮窗（浏览器里自动跳过） -------------
+   * 桌面版由 preload 暴露 window.dsfDesktop；网页版没有该对象，
+   * 因此下面整段逻辑在浏览器中直接返回，页面行为完全不变。
+   * ---------------------------------------------------------------------- */
+
+  function initDesktopIntegration() {
+    var desk = global.dsfDesktop;
+    if (!desk || !desk.quickWindow) return;
+
+    var btn = $('btnQuickWindow');
+    var label = $('quickWindowLabel');
+
+    function syncBtn(on) {
+      if (!btn) return;
+      btn.classList.toggle('on', !!on);
+      btn.title = on
+        ? '快速导入悬浮窗：已开启。主窗口不在前台时，屏幕角落会出现小窗，可直接把链接拖进去。'
+        : '快速导入悬浮窗：已关闭。开启后即使主窗口最小化或被浏览器挡住，也能把链接拖进小窗导入。';
+      if (label) label.textContent = on ? '悬浮窗 开' : '悬浮窗';
+    }
+
+    syncBtn(desk.quickWindow.isEnabled());
+    if (btn) {
+      btn.hidden = false;
+      btn.addEventListener('click', function () {
+        var next = !desk.quickWindow.isEnabled();
+        desk.quickWindow.setEnabled(next);
+        syncBtn(next);
+        ui.toast(next
+          ? '已开启快速导入悬浮窗：主窗口不在前台时，把链接拖到屏幕角落的小窗即可导入'
+          : '已关闭快速导入悬浮窗', next ? 'ok' : 'info', 4200);
+      });
+    }
+
+    // 悬浮窗自带的 ✕ 关闭时，同步主界面按钮状态
+    desk.quickWindow.onChange(function (on) { syncBtn(on); });
+
+    // 悬浮窗拖入内容 → 主进程唤起主窗口 → 这里完成导入
+    desk.onQuickImport(function (payload) {
+      window.__dsfQuickImport = payload; // 便于自检 / 调试
+      var count = 0;
+      try { count = utils.buildCandidates(payload || {}).length; } catch (e) { count = 0; }
+      if (!count) { ui.toast('悬浮窗收到的内容里没有识别到 DeepSeek 链接', 'warn'); return; }
+      var target = (state.mode === 'folder' && !state.searchText && store.getFolder(state.folderId))
+        ? state.folderId : null;
+      ui.toast('已从悬浮窗收到 ' + count + ' 个链接，正在导入…', 'ok', 2600);
+      handleExternalDrop({
+        uriList: payload.uriList,
+        plain: payload.plain,
+        html: payload.html,
+        files: []
+      }, target);
+    });
+  }
+
   /* ------------------------------ 启动 ------------------------------ */
 
   store.subscribe(ui.scheduleRender);
   store.subscribe(function () { if (booted) pushSoon(); });
 
   goRoot();
+  initDesktopIntegration();
   bootstrapFileMode();
   // 兜底：后端无响应时也不要永久卡住回写
   bootTimer = setTimeout(markBooted, 6000);

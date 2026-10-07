@@ -45,7 +45,11 @@ js/dsf.utils.js     工具层   —— 无状态纯函数（UID、转义、链�
 js/dsf.store.js     数据层   —— 唯一数据源 + 浏览器/数据文件双持久化 + 变更订阅
 js/dsf.ui.js        渲染层   —— 读 store+state 输出 DOM；弹窗/Toast/选择器组件
 js/dsf.app.js       主控层   —— 视图路由、事件委托、拖拽 DnD、搜索、备份、文件同步
-desktop/main.js     Electron 主进程 —— 内嵌服务 + 窗口 + 外链转交系统浏览器 + 自检
+desktop/main.js     Electron 主进程 —— 内嵌服务 + 窗口 + 悬浮窗 + 外链转交 + 自检
+desktop/preload.js  主窗口 preload —— contextBridge 暴露悬浮窗开关 / 导入回调
+desktop/quick.html  悬浮窗界面 —— 168×66 无边框胶囊，仅一条拖放区
+desktop/quick.js    悬浮窗逻辑 —— 识别链接并把原始数据交给主进程
+desktop/quick-preload.js 悬浮窗 preload —— sendDrop / close / restore
 desktop/server.js   内嵌服务（Node 零依赖）—— 静态托管 + GET/PUT /api/state
 assets/             应用图标（icon-256 窗口/任务栏、icon-64 网页 favicon、icon-512 备用）
 build/icon.ico      打包用多尺寸 Windows 图标（electron-builder buildResources 约定目录）
@@ -95,13 +99,52 @@ Electron 主进程 ──嵌入──▶ desktop/server.js ──读写──▶
 - `window.open` / `will-navigate` 拦截：DeepSeek 会话链接交给系统浏览器，
   既保留“多点几个会话标签页”的习惯，又避免应用内堆窗口。
 
+### 2.2 快速导入悬浮窗（v0.4.0）
+
+**要解决的问题**：从浏览器拖链接进应用时，主窗口往往被浏览器挡住甚至已最小化，
+拖动过程中无法把它唤到前台，导致导入很别扭。
+
+**方案**：一个独立的、始终置顶的迷你窗（`desktop/quick.html`，168×66 无边框胶囊），
+只承担「接收拖放」这一件事：
+
+```
+浏览器里拖动会话链接
+        │  （拖到屏幕角落的小窗，无需主窗口可见）
+        ▼
+quick.html / quick.js —— DSF.utils 识别 *.deepseek.com 链接
+        │  IPC: dsf:quick-drop（原始 uri-list / plain / html）
+        ▼
+主进程 handleQuickDrop()
+        ├─ restoreMain()：restore() + show() + focus()   ← 自动唤起被最小化的主体
+        └─ IPC: dsf:quick-import → 页面复用既有 handleExternalDrop()
+                                     （文件夹视图内直接存进该文件夹，否则弹导入对话框）
+```
+
+显隐规则（`updateQuickVisibility()`）：
+
+| 主窗口状态 | 悬浮窗 |
+| --- | --- |
+| 在前台（有焦点） | 隐藏（不遮挡应用本体） |
+| 最小化 / 被其它窗口挡住 / 隐藏 | 显示并 `alwaysOnTop('floating')`，`showInactive()` 不抢焦点 |
+
+其它要点：
+
+- 开关与窗位存 `desktop-settings.json`（主进程持有），**页面还没加载时开关就已生效**；
+- 窗口用 `skipTaskbar: true` 不进任务栏；顶部 15px 为拖动条（`-webkit-app-region: drag`），
+  拖动后位置落盘，并被夹回当前显示器工作区内；
+- 主窗口 preload 用 `contextBridge` 暴露最小 API（`dsfDesktop.quickWindow` /
+  `dsfDesktop.onQuickImport`），页面侧**特性检测**使用：网页版没有 `window.dsfDesktop`，
+  整段逻辑直接跳过，浏览器中的行为完全不变；
+- 转发内容按长度截断（uri-list 20KB、文本/HTML 200KB），避免异常大包；
+- 悬浮窗自带的 ✕ 关闭后会通过 `dsf:quick-changed` 反向同步主界面按钮状态。
+
 
 启动时 `bootstrapFileMode()` 先 GET `/api/state`：若数据文件存在，与浏览器存储
 按 `savedAt` 比较**自动取最新**（本地为空则直接采用文件数据），之后所有改动
 双写。`file://` 直接打开时无后端可连，自动回退为纯浏览器存储。
 同步结束前（`booted === false`）页面不往后端写，避免启动竞态把旧数据盖回去。
 
-#### 2.2 数据接口的访问控制（v0.3.2）
+#### 2.3 数据接口的访问控制（v0.3.2）
 
 `/api/state` 是回环地址上的**写接口**。若不设防，用户浏览任意网站时，该网站可以
 用「简单请求」（`Content-Type: text/plain`，不触发 CORS 预检）直接 PUT 覆盖
@@ -315,6 +358,9 @@ drop 事件读取 dataTransfer：uri-list + text/plain + text/html(+ 文件→Fi
   全部被拒且数据文件未被破坏、令牌确实注入 HTML 而磁盘文件不含令牌），共 23 项断言；
 - `npm test`：一次跑完上面两个 Node 测试套件；
 - `npm run smoke`：桌面版启动并校验数据接口（含令牌注入）；
+- `npm run smoke:quick`：快速导入悬浮窗 9 项检查 —— 初始关闭 / 前台时不显示 /
+  开关写入设置 / 主窗最小化后置顶可见 / **悬浮窗页面确实加载成功（含链接解析）** /
+  拖入后自动唤起主窗 / 页面收到数据 / 开关状态落盘 / 关闭后隐藏；
 - `npm run smoke:write` → `npm run smoke:persist`：**写入 → 新进程重启 → 校验数据仍在**
   （等待真实的落盘事件而非猜延迟；用 `--user-data-dir` 指向临时目录，不污染真实数据）；
 - `python server.py` / `node desktop/server.js` + 浏览器：人工冒烟数据文件往返。

@@ -210,6 +210,9 @@ input, textarea, select { font-family: inherit; color: var(--text); }
 }
 .mini-btn:hover { background: var(--panel-2); color: var(--text); }
 .mini-btn .ic { width: 12px; height: 12px; }
+/* 桌面版「快速导入悬浮窗」开关：开启态高亮 */
+.mini-btn.on,
+.mini-btn.on:hover { color: var(--accent); background: var(--accent-weak); }
 
 /* 侧边栏分组 */
 .sb-group {
