@@ -12,6 +12,7 @@ tests/.tmp-*
 deepseek-folder-data.json
 deepseek-folder-data.json.tmp
 deepseek-folder-server.log
+dsf-run.log
 
 # 改名前的旧文件（自动迁移用，仅本地保留）
 dsf-data.json

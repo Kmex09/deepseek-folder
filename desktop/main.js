@@ -17,13 +17,56 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+
+/* ------------------- 启动日志（崩溃取证用） -------------------
+ * GUI 版 exe 的 stdout 捕获不到，所以主进程自己把启动信息与异常写进
+ *   %APPDATA%\DeepSeek Folder\startup.log
+ * 路径不依赖 electron 的 app 对象，因此“Electron 没起来”这种情况也能记录。
+ * ------------------------------------------------------------ */
+const LOG_DIR = path.join(process.env.APPDATA || os.tmpdir(), 'DeepSeek Folder');
+let LOG_FILE = path.join(LOG_DIR, 'startup.log');
+
+function startupLog(msg) {
+  try {
+    fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+    // 首次写入带 UTF-8 BOM：PowerShell 的 Get-Content 才能正确显示中文
+    if (!fs.existsSync(LOG_FILE)) fs.writeFileSync(LOG_FILE, '\uFEFF', 'utf8');
+    fs.appendFileSync(LOG_FILE, new Date().toISOString() + ' ' + msg + '\n', 'utf8');
+  } catch (e) { /* 日志失败不影响启动 */ }
+}
+
+function fmtArg(a) {
+  if (typeof a === 'string') return a;
+  try { return JSON.stringify(a); } catch (e) { return String(a); }
+}
+
+(['log', 'error', 'warn']).forEach((level) => {
+  const original = console[level].bind(console);
+  console[level] = (...args) => {
+    startupLog('[' + level + '] ' + args.map(fmtArg).join(' '));
+    original(...args);
+  };
+});
+
+process.on('uncaughtException', (err) => {
+  startupLog('[uncaughtException] ' + ((err && err.stack) || err));
+  try { console.error(err); } catch (e) { /* ignore */ }
+  try { app.exit(1); } catch (e) { process.exit(1); }
+});
+process.on('unhandledRejection', (reason) => {
+  startupLog('[unhandledRejection] ' + ((reason && reason.stack) || reason));
+});
+
 const { app, BrowserWindow, Menu, shell, session, ipcMain, screen } = require('electron');
 const { createServer } = require('./server');
 
 // 防御：若在设置了 ELECTRON_RUN_AS_NODE=1 的环境里启动（Electron 会退化成纯 Node），
-// require('electron') 拿不到主进程 API —— 直接给出可操作的提示，而不是晦涩的 TypeError
+// require('electron') 拿不到主进程 API —— 记录到日志并给出可操作的提示
 if (!app || typeof app.requestSingleInstanceLock !== 'function') {
+  startupLog('[fatal] 没有 Electron 主进程能力：ELECTRON_RUN_AS_NODE=' +
+    String(process.env.ELECTRON_RUN_AS_NODE || '(未设置)'));
   console.error('[deepseek-folder] 没有 Electron 主进程能力：请用 `npm start` 启动。' +
     '若环境中设置了 ELECTRON_RUN_AS_NODE=1，请先清除它再运行。');
   process.exit(1);
@@ -47,8 +90,15 @@ const argUserData = process.argv.find((a) => a.startsWith('--user-data-dir='));
 if (argUserData) {
   try {
     app.setPath('userData', path.resolve(argUserData.slice('--user-data-dir='.length)));
+    LOG_FILE = path.join(app.getPath('userData'), 'startup.log'); // 自检日志也隔离
   } catch (e) { /* ignore */ }
 }
+
+startupLog('==== 启动 v' + require('../package.json').version + ' ====');
+startupLog('argv: ' + process.argv.join(' '));
+startupLog('exe: ' + process.execPath + ' | electron: ' + process.versions.electron +
+  ' | ELECTRON_RUN_AS_NODE=' + String(process.env.ELECTRON_RUN_AS_NODE || '(unset)'));
+startupLog('userData: ' + app.getPath('userData'));
 
 let win = null;
 let quickWin = null;

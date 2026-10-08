@@ -44,13 +44,14 @@ npm start          # 打开 DeepSeek Folder 桌面应用
 - **快速导入悬浮窗**：侧边栏底部「悬浮窗」按钮开启后，主窗口不在前台（最小化 / 被
   浏览器挡住）时，屏幕角落会保留一个**始终置顶**的迷你窗 —— 把浏览器的会话链接直接
   拖进去，即自动唤起主窗口并完成导入；窗口位置会被记住，点小窗本体也能唤起主窗口；
+- 启动异常时：双击 `run-deepseek-folder.cmd`（诊断启动器）—— 它会写 `dsf-run.log` 并附上应用 `startup.log`，一次拿到完整现场；
 - 快捷键：`F5` / `Ctrl+R` 刷新、`F12` 开发者工具、`F11` 全屏、`Ctrl+W` 关闭；
 - 自检：`npm run smoke`（启动并校验数据接口）、`npm run smoke:quick`（悬浮窗 12 项检查）；
   悬浮窗显示异常时用 `npm run diagnose:quick` 打印实际状态（加载方式 / contentType / 样式）；
   `npm run smoke:write` 后再 `npm run smoke:persist`（写入 → 新进程重启 → 校验数据仍在）；
 - 打包 exe：`npm install -D electron-builder && npm run dist`，产物在 `dist/`：
-  - `DeepSeek Folder 0.5.1.exe` —— **便携版**，拷到哪都能双击运行；
-  - `DeepSeek Folder Setup 0.5.1.exe` —— 安装包（含开始菜单 / 桌面快捷方式）。
+  - `DeepSeek Folder 0.5.2.exe` —— **便携版**，拷到哪都能双击运行；
+  - `DeepSeek Folder Setup 0.5.2.exe` —— 安装包（含开始菜单 / 桌面快捷方式）。
   已实测：便携版 exe 连续两次独立运行（写入 → 重启校验）数据均正确保留。
 - 换图标：把任意图片传给生成脚本，再重新打包即可：
   ```bash

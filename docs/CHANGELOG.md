@@ -5,6 +5,27 @@
 
 ---
 
+## [v0.5.2] — 2026-10-08 · 启动诊断与自检日志
+
+用户反馈“这一版连启动都不行”，而 GUI 版 exe 的 stdout 捕获不到、无法定位，
+因此把**取证能力**做进应用与脚本。
+
+### 新增
+- **主进程启动日志**：`%APPDATA%\DeepSeek Folder\startup.log`（UTF-8 带 BOM，
+  PowerShell 可正常显示），记录版本 / argv / execPath / `ELECTRON_RUN_AS_NODE` /
+  userData / 全部 console 输出，并捕获 `uncaughtException` 与 `unhandledRejection`
+  堆栈；日志路径不依赖 electron 的 app 对象，**即使 Electron 没起来也会先写日志**；
+- **诊断启动器** `run-deepseek-folder.cmd`：清除 `ELECTRON_RUN_AS_NODE`、
+  打开 `ELECTRON_ENABLE_LOGGING`、把输出写入 `dsf-run.log`，并自动附上应用
+  `startup.log` 末尾 40 行 —— 双击一次即可拿到完整现场；
+- 自检场景下日志跟随 `--user-data-dir` 隔离，不污染真实目录。
+
+### 修复
+- 上一版诊断启动器误用中文导致 cmd 解析错乱（与早前 `start-dsf.cmd` 同类问题），
+  已改为**纯 ASCII**。
+
+---
+
 ## [v0.5.1] — 2026-09-28 · 悬浮窗加载加固 + 诊断模式
 
 针对“悬浮窗没有显示为窗体，而是显示一串 HTML 源码”这类现象做加固与排查工具。
