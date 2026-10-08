@@ -39,7 +39,11 @@
         "nsis"
       ]
     },
+    "portable": {
+      "artifactName": "DeepSeek Folder.exe"
+    },
     "nsis": {
+      "artifactName": "DeepSeek Folder Setup.exe",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "shortcutName": "DeepSeek Folder"

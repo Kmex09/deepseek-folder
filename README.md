@@ -50,8 +50,9 @@ npm start          # 打开 DeepSeek Folder 桌面应用
   悬浮窗显示异常时用 `npm run diagnose:quick` 打印实际状态（加载方式 / contentType / 样式）；
   `npm run smoke:write` 后再 `npm run smoke:persist`（写入 → 新进程重启 → 校验数据仍在）；
 - 打包 exe：`npm install -D electron-builder && npm run dist`，产物在 `dist/`：
-  - `DeepSeek Folder 0.5.2.exe` —— **便携版**，拷到哪都能双击运行；
-  - `DeepSeek Folder Setup 0.5.2.exe` —— 安装包（含开始菜单 / 桌面快捷方式）。
+  - `DeepSeek Folder.exe` —— **便携版**，拷到哪都能双击运行。
+    文件名**不带版本号**，重新打包会就地覆盖，因此桌面/开始菜单快捷方式不会失效；
+  - `DeepSeek Folder Setup.exe` —— 安装包（含开始菜单 / 桌面快捷方式）。
   已实测：便携版 exe 连续两次独立运行（写入 → 重启校验）数据均正确保留。
 - 换图标：把任意图片传给生成脚本，再重新打包即可：
   ```bash
