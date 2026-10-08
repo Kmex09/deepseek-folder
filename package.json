@@ -1,7 +1,7 @@
 {
   "name": "deepseek-folder",
   "productName": "DeepSeek Folder",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "private": true,
   "description": "DeepSeek Folder · 会话夹 桌面版（Electron）。复用 web 版页面，内嵌本地服务，数据自动保存到用户数据目录，无需任何手动保存/授权。",
   "author": "DF",
@@ -13,6 +13,7 @@
     "smoke:write": "electron . --smoke-write",
     "smoke:persist": "electron . --smoke-expect-persist",
     "smoke:quick": "electron . --smoke-quick",
+    "smoke:close": "electron . --smoke-close",
     "diagnose:quick": "electron . --diagnose-quick",
     "web": "node desktop/server.js",
     "dist": "electron-builder --win"

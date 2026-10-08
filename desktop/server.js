@@ -258,7 +258,8 @@ function createServer(opts) {
             const payload = Buffer.concat(chunks).toString('utf8');
             writeState(payload);
             log('[deepseek-folder] 数据已保存 → ' + dataFile);
-            onSave('save'); // 仅供调用方（桌面版自检）观察落盘事件
+            onSave('save');   // 仅供调用方（桌面版自检）观察落盘事件
+            onFlush();        // 页面主动落盘完成：让主进程的“关窗等待”立即结束
             send(res, 200, '{"ok":true}', null, cors);
           } catch (e) {
             log('[deepseek-folder] 保存失败：' + e.message);

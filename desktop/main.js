@@ -77,6 +77,7 @@ const SMOKE = process.argv.includes('--smoke');
 const SMOKE_WRITE = process.argv.includes('--smoke-write');
 const SMOKE_EXPECT = process.argv.includes('--smoke-expect-persist');
 const SMOKE_QUICK = process.argv.includes('--smoke-quick');
+const SMOKE_CLOSE = process.argv.includes('--smoke-close');
 const DIAGNOSE_QUICK = process.argv.includes('--diagnose-quick');
 const MARKER_FOLDER = '桌面自检文件夹';
 
@@ -336,7 +337,8 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (!win) return;
+    // 没有可用窗口时（异常残留状态）让出单实例锁，避免新实例被静默吞掉
+    if (!win || win.isDestroyed()) { app.quit(); return; }
     if (win.isMinimized()) win.restore();
     win.show();
     win.focus();
@@ -397,7 +399,7 @@ async function start() {
     icon: path.join(ROOT_DIR, 'assets', 'icon-256.png'), // 窗口 / 任务栏图标
     backgroundColor: '#f4f5f8',
     autoHideMenuBar: true,
-    show: !SMOKE,
+    show: !(SMOKE || SMOKE_CLOSE),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'), // 暴露桌面版能力（悬浮窗开关等）
       contextIsolation: true,
@@ -427,19 +429,36 @@ async function start() {
   win.on('closed', () => { win = null; });
 
   // 退出前先把最后一次改动落盘（否则防抖等待中的改动会随进程一起消失）
+  // ⚠ 必须有超时兜底：页面可能尚未就绪（flush 是空操作）或正在加载，
+  //   无限等待会留下僵尸进程 → 占住单实例锁 → 之后双击“无反应”。
   win.on('close', (event) => {
     if (quitting) return;
     event.preventDefault();
     quitting = true;
-    if (SMOKE || SMOKE_WRITE || SMOKE_EXPECT || SMOKE_QUICK) {
-      try { win.destroy(); } catch (e) { /* ignore */ }
+
+    const destroyNow = () => {
+      try { if (win && !win.isDestroyed()) win.destroy(); } catch (e) { /* ignore */ }
+    };
+
+    // 自检 / 诊断模式：不等待，直接退出
+    if (SMOKE || SMOKE_WRITE || SMOKE_EXPECT || SMOKE_QUICK || SMOKE_CLOSE || DIAGNOSE_QUICK) {
+      destroyNow();
       return;
     }
+
+    const FLUSH_TIMEOUT_MS = 1500;
+    let finished = false;
+    const finish = () => { if (finished) return; finished = true; destroyNow(); };
+
+    setTimeout(finish, FLUSH_TIMEOUT_MS); // 兜底：无论页面是否响应都要退出
+
+    if (win.webContents.isLoading()) { setTimeout(finish, 150); return; }
+
     win.webContents.executeJavaScript('window.DF && window.DF.flush && window.DF.flush()')
       .catch(() => {})
       .then(() => pageFlushed.promise)
-      .then(() => { try { win.destroy(); } catch (e) { /* ignore */ } })
-      .catch(() => { try { win.destroy(); } catch (e) { /* ignore */ } });
+      .then(finish)
+      .catch(finish);
   });
 
   // 无菜单栏时默认快捷键会失效，这里补上常用操作
@@ -463,6 +482,30 @@ async function start() {
   });
 
   await win.loadURL(appUrl);
+
+  if (SMOKE_CLOSE) {
+    // 回归自检：关闭窗口后进程必须在有限时间内真正退出。
+    // 若这里失败，就会留下僵尸实例占住单实例锁，表现为“双击 exe 无反应”。
+    const t0 = Date.now();
+    let reported = false;
+    const destroyNow = () => { try { if (win && !win.isDestroyed()) win.destroy(); } catch (e) { /* ignore */ } };
+
+    app.on('quit', () => {
+      if (reported) return;
+      reported = true;
+      const ms = Date.now() - t0;
+      const ok = ms < 5000;
+      console.log((ok ? 'SMOKE CLOSE OK' : 'SMOKE CLOSE SLOW') + ' (窗口已关闭，进程退出，用时 ' + ms + 'ms)');
+    });
+    win.once('closed', () => console.log('  ✔ 窗口已销毁 (' + (Date.now() - t0) + 'ms)'));
+
+    setTimeout(() => { try { win.close(); } catch (e) { destroyNow(); } }, 800);
+    setTimeout(() => {
+      console.log('SMOKE CLOSE FAIL: 8 秒后进程仍未退出（会出现僵尸实例占住单实例锁）');
+      process.exit(1);
+    }, 8000);
+    return;
+  }
 
   if (SMOKE_WRITE) {
     // 写自检：在页面里真实创建一个文件夹（走 store → 内嵌服务 → 数据文件）

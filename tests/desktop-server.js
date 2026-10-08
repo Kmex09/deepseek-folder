@@ -22,8 +22,30 @@ function assert(cond, msg) {
   else { failed++; console.error('  ✘ FAIL: ' + msg); }
 }
 
+/**
+ * 可靠的删除：某些环境（实测 Node 24 + DSH 沙箱）下 fs.rmSync 会**静默失效**
+ * ——既不删除也不抛错，于是残留文件会让下一次测试读到旧数据。
+ * 这里先试 rmSync，再用 unlink/rmdir 兜底，并返回是否真的删干净了。
+ */
+function removePath(target) {
+  try { fs.rmSync(target, { recursive: true, force: true }); } catch (e) { /* 继续兜底 */ }
+  if (fs.existsSync(target)) {
+    try {
+      const st = fs.lstatSync(target);
+      if (st.isDirectory()) {
+        fs.readdirSync(target).forEach((name) => removePath(path.join(target, name)));
+        fs.rmdirSync(target);
+      } else {
+        fs.unlinkSync(target);
+      }
+    } catch (e) { /* ignore */ }
+  }
+  return !fs.existsSync(target);
+}
+
 async function main() {
-  fs.rmSync(TMP, { force: true });
+  // 起始清理必须可靠：残留会导致“GET /api/state 返回空数据”等假失败
+  assert(removePath(TMP), '测试开始前清理临时数据文件');
 
   // 超时保护：任何一步卡住都不会让测试永久挂起
   const guard = setTimeout(() => {
@@ -132,14 +154,14 @@ async function main() {
   // （在 Windows 上直接 process.exit 会与未断开的 keep-alive 连接竞争，触发 libuv 断言）
   if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
   await new Promise((res) => server.close(res));
-  fs.rmSync(TMP, { force: true });
+  assert(removePath(TMP), '测试结束后临时数据文件已清理');
 
   /* -----------------------------------------------------------------------
    * v0.5.0 项目改名（DSF → DeepSeek Folder）：旧数据文件自动迁移
    * --------------------------------------------------------------------- */
   console.log('\n—— 改名迁移：旧数据文件 dsf-data.json → 新文件 ——');
   const legacyDir = path.join(__dirname, '.tmp-legacy-migrate');
-  fs.rmSync(legacyDir, { recursive: true, force: true });
+  removePath(legacyDir);
   fs.mkdirSync(legacyDir, { recursive: true });
   const legacyFile = path.join(legacyDir, 'dsf-data.json');
   const migratedFile = path.join(legacyDir, 'deepseek-folder-data.json');
@@ -164,7 +186,7 @@ async function main() {
 
   if (typeof server2.closeAllConnections === 'function') server2.closeAllConnections();
   await new Promise((res) => server2.close(res));
-  fs.rmSync(legacyDir, { recursive: true, force: true });
+  assert(removePath(legacyDir), '测试结束后迁移测试目录已清理');
 
   console.log('\n========================================');
   console.log('结果：通过 ' + passed + ' 项，失败 ' + failed + ' 项');
@@ -173,6 +195,6 @@ async function main() {
 
 main().catch((e) => {
   console.error('测试异常：', e);
-  try { fs.rmSync(TMP, { force: true }); } catch (_) { /* ignore */ }
+  removePath(TMP);
   process.exitCode = 1;
 });

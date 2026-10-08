@@ -143,6 +143,7 @@ node tests/smoke.js           # 数据层 / 链接解析 / 索引缓存 / 批量
 node tests/desktop-server.js  # 内嵌服务接口 + 访问控制 + 数据文件迁移（26 项断言）
 npm run smoke                 # 桌面版启动自检
 npm run smoke:quick           # 快速导入悬浮窗自检（12 项）
+npm run smoke:close           # 关窗回归自检（进程必须在 5 秒内退出）
 npm run diagnose:quick        # 悬浮窗状态诊断（排查显示异常）
 npm run smoke:write && npm run smoke:persist   # 桌面版“写入 → 重启 → 数据仍在”自检
 ```
