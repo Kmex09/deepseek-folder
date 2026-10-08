@@ -4,6 +4,10 @@ dist/
 .npm-cache/
 .tmp-desktop-profile/
 
+# 自检 / 临时目录与测试残留
+.tmp-*/
+tests/.tmp-*
+
 # DeepSeek Folder 运行时数据（本地记忆文件，勿提交）
 deepseek-folder-data.json
 deepseek-folder-data.json.tmp

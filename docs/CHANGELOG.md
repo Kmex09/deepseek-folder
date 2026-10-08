@@ -5,6 +5,30 @@
 
 ---
 
+## [v0.5.1] — 2026-09-28 · 悬浮窗加载加固 + 诊断模式
+
+针对“悬浮窗没有显示为窗体，而是显示一串 HTML 源码”这类现象做加固与排查工具。
+
+### 变更
+- **悬浮窗改经内嵌服务加载**：`http://127.0.0.1:<port>/desktop/quick.html`
+  （服务对 `.html` 显式返回 `text/html; charset=utf-8`），不再依赖 Chromium 对
+  `file://` 的 MIME 推断；失败时回落到 `loadFile` 并打印实际加载方式；
+- **新增诊断模式** `npm run diagnose:quick`（`--diagnose-quick`）：打开悬浮窗并打印
+  真实状态 —— 加载方式 / `document.contentType` / URL / 窗口位置与可见性 /
+  `pill` 圆角与背景 / 正文前 120 字，用于出现异常时直接取证；
+- **自检补强**：`smoke:quick` 增加两条断言 —— `document.contentType === 'text/html'`
+  与“样式已生效（圆角胶囊渲染正常）”，共 12 项，防止该类问题静默回归；
+- `.gitignore` 增加 `.tmp-*/` 与 `tests/.tmp-*`（自检残留）。
+
+### 排查结论（本机实测）
+- 开发环境与 asar 打包环境下，`loadFile` 与内嵌服务**都**返回 `text/html`，
+  悬浮窗渲染正常（诊断输出：`contentType=text/html`、`pill` 圆角 12px、
+  背景 `rgba(23,27,34,0.93)`、正文为“拖入链接”）；
+- 因此若仍出现源码文本，请运行 `npm run diagnose:quick` 并把输出发回，
+  其中 `加载方式` 与 `contentType` 两行即可定位问题所在。
+
+---
+
 ## [v0.5.0] — 2026-09-27 · 项目更名：DSF → DeepSeek Folder
 
 整个项目更名：英文主名 **DeepSeek Folder**（中文副名「DeepSeek 会话夹」），

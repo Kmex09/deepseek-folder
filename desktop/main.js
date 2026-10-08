@@ -34,6 +34,7 @@ const SMOKE = process.argv.includes('--smoke');
 const SMOKE_WRITE = process.argv.includes('--smoke-write');
 const SMOKE_EXPECT = process.argv.includes('--smoke-expect-persist');
 const SMOKE_QUICK = process.argv.includes('--smoke-quick');
+const DIAGNOSE_QUICK = process.argv.includes('--diagnose-quick');
 const MARKER_FOLDER = '桌面自检文件夹';
 
 // 悬浮窗尺寸：保持“非常小”，只放一条拖放区
@@ -51,6 +52,7 @@ if (argUserData) {
 
 let win = null;
 let quickWin = null;
+let quickLoadMode = ''; // 'http' | 'file(fallback)' | 'file(no-server)'
 let server = null;
 let appUrl = '';
 let quitting = false;
@@ -156,7 +158,24 @@ function createQuickWindow() {
   });
 
   quickWin.setAlwaysOnTop(true, 'floating');
-  quickWin.loadFile(path.join(__dirname, 'quick.html'));
+
+  // 加载方式：优先走内嵌服务（对 .html 显式返回 text/html; charset=utf-8，
+  // 不依赖 Chromium 对 file:// 的 MIME 推断）；失败再退回 loadFile。
+  // 两条路都会记录实际使用的模式，便于 --diagnose-quick 排查。
+  const quickFile = path.join(__dirname, 'quick.html');
+  if (appUrl) {
+    quickWin.loadURL(appUrl + 'desktop/quick.html').then(() => {
+      quickLoadMode = 'http';
+    }).catch((err) => {
+      quickLoadMode = 'file(fallback)';
+      console.log('[deepseek-folder] 悬浮窗改用 file:// 加载（内嵌服务加载失败：' +
+        (err && err.message) + '）');
+      if (quickWin) quickWin.loadFile(quickFile);
+    });
+  } else {
+    quickLoadMode = 'file(no-server)';
+    quickWin.loadFile(quickFile);
+  }
 
   // 记录位置（并把窗口夹回可见工作区，避免拖到屏幕外找不到）
   quickWin.on('moved', () => {
@@ -426,6 +445,54 @@ async function start() {
     return;
   }
 
+  if (DIAGNOSE_QUICK) {
+    // 悬浮窗诊断：把窗口真实状态打印出来（用于排查“显示成 HTML 源码”这类问题）
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    settings.quickWindow = true;
+    saveSettings();
+    if (win.isMinimized()) win.restore();
+    win.minimize();                       // 触发悬浮窗出现
+    await wait(900);
+    updateQuickVisibility();
+    await wait(700);
+
+    const info = await (quickWin
+      ? quickWin.webContents.executeJavaScript(`(() => {
+          const pill = document.getElementById('pill');
+          const drop = document.getElementById('drop');
+          return {
+            contentType: document.contentType,
+            url: location.href,
+            title: document.title,
+            bodyText: document.body ? document.body.innerText.slice(0, 120) : '(no body)',
+            hasPill: !!pill,
+            pillRadius: pill ? getComputedStyle(pill).borderRadius : '',
+            pillBg: pill ? getComputedStyle(pill).backgroundColor : '',
+            dropText: drop ? drop.innerText.trim() : '',
+            headHtml: document.head ? document.head.innerHTML.slice(0, 100) : ''
+          };
+        })()`).catch((e) => ({ error: String(e && e.message) }))
+      : { error: '悬浮窗未创建' });
+
+    console.log('===== 悬浮窗诊断 =====');
+    console.log('加载方式      :', quickLoadMode || '(未知)');
+    console.log('窗口存在      :', !!quickWin, '| 可见:', !!(quickWin && quickWin.isVisible()));
+    console.log('窗口尺寸/位置 :', quickWin ? JSON.stringify(quickWin.getBounds()) : '-');
+    console.log('页面 contentType:', info.contentType);
+    console.log('页面 URL      :', info.url);
+    console.log('页面 title    :', info.title);
+    console.log('pill 存在     :', info.hasPill, '| 圆角:', info.pillRadius, '| 背景:', info.pillBg);
+    console.log('拖放区文字    :', JSON.stringify(info.dropText));
+    console.log('正文前 120 字 :', JSON.stringify(info.bodyText));
+    console.log('head 前 100 字:', JSON.stringify(info.headHtml));
+    if (info.error) console.log('诊断异常      :', info.error);
+    console.log('======================');
+    settings.quickWindow = false;
+    saveSettings();
+    setTimeout(() => app.exit(0), 300);
+    return;
+  }
+
   if (SMOKE_QUICK) {
     // 悬浮窗自检：开关可读 → 前台时不显示 → 开启 → 最小化主窗后置顶可见
     // → 模拟拖入链接 → 主窗被唤起且页面收到数据 → 设置已落盘 → 关闭后隐藏
@@ -461,6 +528,21 @@ async function start() {
       ).catch(() => false)
       : Promise.resolve(false));
     checks.push(['悬浮窗页面加载成功（含链接解析）', quickPageOk === true]);
+
+    // 关键：必须是按 HTML 解析（contentType=text/html）。
+    // 若被当成 text/plain，窗口里会把 HTML 源码当文字显示出来。
+    const quickType = await (quickWin
+      ? quickWin.webContents.executeJavaScript('document.contentType').catch(() => '')
+      : Promise.resolve(''));
+    checks.push(['悬浮窗以 text/html 解析（不是纯文本源码）', quickType === 'text/html']);
+
+    // 进一步确认：CSS 生效（html 元素背景为透明，说明样式表已应用）
+    const quickStyled = await (quickWin
+      ? quickWin.webContents.executeJavaScript(
+        "getComputedStyle(document.getElementById('pill')).borderRadius !== ''"
+      ).catch(() => false)
+      : Promise.resolve(false));
+    checks.push(['悬浮窗样式已生效（圆角胶囊渲染正常）', quickStyled === true]);
 
     // 3) 模拟从悬浮窗拖入一个 DeepSeek 链接
     const payload = {
